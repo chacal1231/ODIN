@@ -1,0 +1,42 @@
+# Use together with compose.yaml; same project and PostgreSQL volume.
+services:
+  api:
+    environment:
+      ODIN_ORIGIN: https://odin.example.com
+      ODIN_SECURE_COOKIES: 'true'
+    command: [uvicorn, 'odin.main:app', --host, 0.0.0.0, --port, '8000', --proxy-headers, --forwarded-allow-ips, '172.30.90.2', --no-access-log]
+    networks:
+      default: {}
+      public_edge:
+        ipv4_address: 172.30.90.3
+  worker:
+    environment:
+      ODIN_ORIGIN: https://odin.example.com
+      ODIN_SECURE_COOKIES: 'true'
+  telegram:
+    environment:
+      ODIN_ORIGIN: https://odin.example.com
+      ODIN_SECURE_COOKIES: 'true'
+  probe:
+    environment:
+      ODIN_ORIGIN: https://odin.example.com
+      ODIN_SECURE_COOKIES: 'true'
+  web:
+    ports: !override
+      - '80:80'
+      - '443:443'
+    volumes:
+      - ./deploy/Caddyfile.public:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    networks:
+      public_edge:
+        ipv4_address: 172.30.90.2
+networks:
+  public_edge:
+    ipam:
+      config:
+        - subnet: 172.30.90.0/24
+volumes:
+  caddy_data:
+  caddy_config:

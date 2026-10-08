@@ -1,0 +1,1044 @@
+{
+  "category": "HYPERSCALERS",
+  "version": 1,
+  "providers": [
+    {
+      "provider": "AWS",
+      "asn": 16509,
+      "targets": [
+        {
+          "name": "AWS-IAD",
+          "city": "N. Virginia",
+          "country": "US",
+          "region": "us-east-1",
+          "target": "ec2.us-east-1.amazonaws.com",
+          "protocol": "tcp",
+          "port": 443,
+          "scope": "regional"
+        },
+        {
+          "name": "AWS-CMH",
+          "city": "Ohio",
+          "country": "US",
+          "region": "us-east-2",
+          "target": "ec2.us-east-2.amazonaws.com",
+          "protocol": "tcp",
+          "port": 443,
+          "scope": "regional"
+        },
+        {
+          "name": "AWS-SFO",
+          "city": "N. California",
+          "country": "US",
+          "region": "us-west-1",
+          "target": "ec2.us-west-1.amazonaws.com",
+          "protocol": "tcp",
+          "port": 443,
+          "scope": "regional"
+        },
+        {
+          "name": "AWS-PDX",
+          "city": "Oregon",
+          "country": "US",
+          "region": "us-west-2",
+          "target": "ec2.us-west-2.amazonaws.com",
+          "protocol": "tcp",
+          "port": 443,
+          "scope": "regional"
+        },
+        {
+          "name": "AWS-YUL",
+          "city": "Montreal",
+          "country": "CA",
+          "region": "ca-central-1",
+          "target": "ec2.ca-central-1.amazonaws.com",
+          "protocol": "tcp",
+          "port": 443,
+          "scope": "regional"
+        },
+        {
+          "name": "AWS-GRU",
+          "city": "Sao Paulo",
+          "country": "BR",
+          "region": "sa-east-1",
+          "target": "ec2.sa-east-1.amazonaws.com",
+          "protocol": "tcp",
+          "port": 443,
+          "scope": "regional"
+        },
+        {
+          "name": "AWS-QRO",
+          "city": "Queretaro",
+          "country": "MX",
+          "region": "mx-central-1",
+          "target": "ec2.mx-central-1.amazonaws.com",
+          "protocol": "tcp",
+          "port": 443,
+          "scope": "regional"
+        },
+        {
+          "name": "AWS-DUB",
+          "city": "Dublin",
+          "country": "IE",
+          "region": "eu-west-1",
+          "target": "ec2.eu-west-1.amazonaws.com",
+          "protocol": "tcp",
+          "port": 443,
+          "scope": "regional"
+        },
+        {
+          "name": "AWS-LON",
+          "city": "London",
+          "country": "GB",
+          "region": "eu-west-2",
+          "target": "ec2.eu-west-2.amazonaws.com",
+          "protocol": "tcp",
+          "port": 443,
+          "scope": "regional"
+        },
+        {
+          "name": "AWS-PAR",
+          "city": "Paris",
+          "country": "FR",
+          "region": "eu-west-3",
+          "target": "ec2.eu-west-3.amazonaws.com",
+          "protocol": "tcp",
+          "port": 443,
+          "scope": "regional"
+        },
+        {
+          "name": "AWS-FRA",
+          "city": "Frankfurt",
+          "country": "DE",
+          "region": "eu-central-1",
+          "target": "ec2.eu-central-1.amazonaws.com",
+          "protocol": "tcp",
+          "port": 443,
+          "scope": "regional"
+        },
+        {
+          "name": "AWS-MAD",
+          "city": "Zaragoza",
+          "country": "ES",
+          "region": "eu-south-2",
+          "target": "ec2.eu-south-2.amazonaws.com",
+          "protocol": "tcp",
+          "port": 443,
+          "scope": "regional"
+        },
+        {
+          "name": "AWS-TYO",
+          "city": "Tokyo",
+          "country": "JP",
+          "region": "ap-northeast-1",
+          "target": "ec2.ap-northeast-1.amazonaws.com",
+          "protocol": "tcp",
+          "port": 443,
+          "scope": "regional"
+        },
+        {
+          "name": "AWS-SIN",
+          "city": "Singapore",
+          "country": "SG",
+          "region": "ap-southeast-1",
+          "target": "ec2.ap-southeast-1.amazonaws.com",
+          "protocol": "tcp",
+          "port": 443,
+          "scope": "regional"
+        },
+        {
+          "name": "AWS-SYD",
+          "city": "Sydney",
+          "country": "AU",
+          "region": "ap-southeast-2",
+          "target": "ec2.ap-southeast-2.amazonaws.com",
+          "protocol": "tcp",
+          "port": 443,
+          "scope": "regional"
+        },
+        {
+          "name": "AWS-CPT",
+          "city": "Cape Town",
+          "country": "ZA",
+          "region": "af-south-1",
+          "target": "ec2.af-south-1.amazonaws.com",
+          "protocol": "tcp",
+          "port": 443,
+          "scope": "regional"
+        }
+      ]
+    },
+
+    {
+      "provider": "GOOGLE",
+      "asn": 15169,
+      "targets": [
+        {
+          "name": "GOOGLE-DNS-1",
+          "target": "8.8.8.8",
+          "protocol": "icmp",
+          "scope": "anycast"
+        },
+        {
+          "name": "GOOGLE-DNS-2",
+          "target": "8.8.4.4",
+          "protocol": "icmp",
+          "scope": "anycast"
+        },
+        {
+          "name": "GOOGLE-DNS-V6-1",
+          "target": "2001:4860:4860::8888",
+          "protocol": "icmp6",
+          "scope": "anycast"
+        },
+        {
+          "name": "GOOGLE-DNS-V6-2",
+          "target": "2001:4860:4860::8844",
+          "protocol": "icmp6",
+          "scope": "anycast"
+        },
+        {
+          "name": "GOOGLE-WEB",
+          "target": "www.google.com",
+          "protocol": "https",
+          "port": 443,
+          "scope": "edge"
+        },
+        {
+          "name": "GOOGLE-CLOUD",
+          "target": "cloud.google.com",
+          "protocol": "https",
+          "port": 443,
+          "scope": "edge"
+        },
+        {
+          "name": "GOOGLE-COMPUTE-API",
+          "target": "compute.googleapis.com",
+          "protocol": "https",
+          "port": 443,
+          "scope": "api"
+        },
+        {
+          "name": "GOOGLE-STORAGE",
+          "target": "storage.googleapis.com",
+          "protocol": "https",
+          "port": 443,
+          "scope": "edge"
+        },
+        {
+          "name": "GCP-IAD",
+          "city": "Ashburn",
+          "country": "US",
+          "region": "us-east4",
+          "target": "logging.us-east4.rep.googleapis.com",
+          "protocol": "tcp",
+          "port": 443,
+          "scope": "regional"
+        },
+        {
+          "name": "GCP-CHS",
+          "city": "Moncks Corner",
+          "country": "US",
+          "region": "us-east1",
+          "target": "logging.us-east1.rep.googleapis.com",
+          "protocol": "tcp",
+          "port": 443,
+          "scope": "regional"
+        },
+        {
+          "name": "GCP-CMH",
+          "city": "Columbus",
+          "country": "US",
+          "region": "us-east5",
+          "target": "logging.us-east5.rep.googleapis.com",
+          "protocol": "tcp",
+          "port": 443,
+          "scope": "regional"
+        },
+        {
+          "name": "GCP-OMA",
+          "city": "Council Bluffs",
+          "country": "US",
+          "region": "us-central1",
+          "target": "logging.us-central1.rep.googleapis.com",
+          "protocol": "tcp",
+          "port": 443,
+          "scope": "regional"
+        },
+        {
+          "name": "GCP-DFW",
+          "city": "Dallas",
+          "country": "US",
+          "region": "us-south1",
+          "target": "logging.us-south1.rep.googleapis.com",
+          "protocol": "tcp",
+          "port": 443,
+          "scope": "regional"
+        },
+        {
+          "name": "GCP-PDX",
+          "city": "The Dalles",
+          "country": "US",
+          "region": "us-west1",
+          "target": "logging.us-west1.rep.googleapis.com",
+          "protocol": "tcp",
+          "port": 443,
+          "scope": "regional"
+        },
+        {
+          "name": "GCP-LAX",
+          "city": "Los Angeles",
+          "country": "US",
+          "region": "us-west2",
+          "target": "logging.us-west2.rep.googleapis.com",
+          "protocol": "tcp",
+          "port": 443,
+          "scope": "regional"
+        },
+        {
+          "name": "GCP-YUL",
+          "city": "Montreal",
+          "country": "CA",
+          "region": "northamerica-northeast1",
+          "target": "logging.northamerica-northeast1.rep.googleapis.com",
+          "protocol": "tcp",
+          "port": 443,
+          "scope": "regional"
+        },
+        {
+          "name": "GCP-YYZ",
+          "city": "Toronto",
+          "country": "CA",
+          "region": "northamerica-northeast2",
+          "target": "logging.northamerica-northeast2.rep.googleapis.com",
+          "protocol": "tcp",
+          "port": 443,
+          "scope": "regional"
+        },
+        {
+          "name": "GCP-QRO",
+          "city": "Queretaro",
+          "country": "MX",
+          "region": "northamerica-south1",
+          "target": "logging.northamerica-south1.rep.googleapis.com",
+          "protocol": "tcp",
+          "port": 443,
+          "scope": "regional"
+        },
+        {
+          "name": "GCP-GRU",
+          "city": "Sao Paulo",
+          "country": "BR",
+          "region": "southamerica-east1",
+          "target": "logging.southamerica-east1.rep.googleapis.com",
+          "protocol": "tcp",
+          "port": 443,
+          "scope": "regional"
+        },
+        {
+          "name": "GCP-SCL",
+          "city": "Santiago",
+          "country": "CL",
+          "region": "southamerica-west1",
+          "target": "logging.southamerica-west1.rep.googleapis.com",
+          "protocol": "tcp",
+          "port": 443,
+          "scope": "regional"
+        },
+        {
+          "name": "GCP-BRU",
+          "city": "St. Ghislain",
+          "country": "BE",
+          "region": "europe-west1",
+          "target": "logging.europe-west1.rep.googleapis.com",
+          "protocol": "tcp",
+          "port": 443,
+          "scope": "regional"
+        },
+        {
+          "name": "GCP-AMS",
+          "city": "Eemshaven",
+          "country": "NL",
+          "region": "europe-west4",
+          "target": "logging.europe-west4.rep.googleapis.com",
+          "protocol": "tcp",
+          "port": 443,
+          "scope": "regional"
+        },
+        {
+          "name": "GCP-LHR",
+          "city": "London",
+          "country": "GB",
+          "region": "europe-west2",
+          "target": "logging.europe-west2.rep.googleapis.com",
+          "protocol": "tcp",
+          "port": 443,
+          "scope": "regional"
+        },
+        {
+          "name": "GCP-FRA",
+          "city": "Frankfurt",
+          "country": "DE",
+          "region": "europe-west3",
+          "target": "logging.europe-west3.rep.googleapis.com",
+          "protocol": "tcp",
+          "port": 443,
+          "scope": "regional"
+        },
+        {
+          "name": "GCP-PAR",
+          "city": "Paris",
+          "country": "FR",
+          "region": "europe-west9",
+          "target": "logging.europe-west9.rep.googleapis.com",
+          "protocol": "tcp",
+          "port": 443,
+          "scope": "regional"
+        },
+        {
+          "name": "GCP-MAD",
+          "city": "Madrid",
+          "country": "ES",
+          "region": "europe-southwest1",
+          "target": "logging.europe-southwest1.rep.googleapis.com",
+          "protocol": "tcp",
+          "port": 443,
+          "scope": "regional"
+        },
+        {
+          "name": "GCP-TYO",
+          "city": "Tokyo",
+          "country": "JP",
+          "region": "asia-northeast1",
+          "target": "logging.asia-northeast1.rep.googleapis.com",
+          "protocol": "tcp",
+          "port": 443,
+          "scope": "regional"
+        },
+        {
+          "name": "GCP-SIN",
+          "city": "Singapore",
+          "country": "SG",
+          "region": "asia-southeast1",
+          "target": "logging.asia-southeast1.rep.googleapis.com",
+          "protocol": "tcp",
+          "port": 443,
+          "scope": "regional"
+        },
+        {
+          "name": "GCP-SYD",
+          "city": "Sydney",
+          "country": "AU",
+          "region": "australia-southeast1",
+          "target": "logging.australia-southeast1.rep.googleapis.com",
+          "protocol": "tcp",
+          "port": 443,
+          "scope": "regional"
+        },
+        {
+          "name": "GCP-JNB",
+          "city": "Johannesburg",
+          "country": "ZA",
+          "region": "africa-south1",
+          "target": "logging.africa-south1.rep.googleapis.com",
+          "protocol": "tcp",
+          "port": 443,
+          "scope": "regional"
+        }
+      ]
+    },
+
+    {
+      "provider": "MICROSOFT",
+      "asn": 8075,
+      "targets": [
+        {
+          "name": "AZURE-GLOBAL",
+          "target": "azure.microsoft.com",
+          "protocol": "https",
+          "port": 443,
+          "scope": "edge"
+        },
+        {
+          "name": "AZURE-PORTAL",
+          "target": "portal.azure.com",
+          "protocol": "https",
+          "port": 443,
+          "scope": "edge"
+        },
+        {
+          "name": "AZURE-MANAGEMENT",
+          "target": "management.azure.com",
+          "protocol": "https",
+          "port": 443,
+          "scope": "api"
+        },
+        {
+          "name": "MICROSOFT-GLOBAL",
+          "target": "www.microsoft.com",
+          "protocol": "https",
+          "port": 443,
+          "scope": "edge"
+        },
+        {
+          "name": "MICROSOFT-365",
+          "target": "www.office.com",
+          "protocol": "https",
+          "port": 443,
+          "scope": "edge"
+        },
+        {
+          "name": "AZURE-IAD",
+          "city": "Virginia",
+          "country": "US",
+          "region": "eastus",
+          "target": "eastus.handler.control.monitor.azure.com",
+          "protocol": "tcp",
+          "port": 443,
+          "scope": "regional"
+        },
+        {
+          "name": "AZURE-IAD-2",
+          "city": "Virginia",
+          "country": "US",
+          "region": "eastus2",
+          "target": "eastus2.handler.control.monitor.azure.com",
+          "protocol": "tcp",
+          "port": 443,
+          "scope": "regional"
+        },
+        {
+          "name": "AZURE-DSM",
+          "city": "Iowa",
+          "country": "US",
+          "region": "centralus",
+          "target": "centralus.handler.control.monitor.azure.com",
+          "protocol": "tcp",
+          "port": 443,
+          "scope": "regional"
+        },
+        {
+          "name": "AZURE-SAT",
+          "city": "Texas",
+          "country": "US",
+          "region": "southcentralus",
+          "target": "southcentralus.handler.control.monitor.azure.com",
+          "protocol": "tcp",
+          "port": 443,
+          "scope": "regional"
+        },
+        {
+          "name": "AZURE-SEA",
+          "city": "Washington",
+          "country": "US",
+          "region": "westus2",
+          "target": "westus2.handler.control.monitor.azure.com",
+          "protocol": "tcp",
+          "port": 443,
+          "scope": "regional"
+        },
+        {
+          "name": "AZURE-PHX",
+          "city": "Phoenix",
+          "country": "US",
+          "region": "westus3",
+          "target": "westus3.handler.control.monitor.azure.com",
+          "protocol": "tcp",
+          "port": 443,
+          "scope": "regional"
+        },
+        {
+          "name": "AZURE-YYZ",
+          "city": "Toronto",
+          "country": "CA",
+          "region": "canadacentral",
+          "target": "canadacentral.handler.control.monitor.azure.com",
+          "protocol": "tcp",
+          "port": 443,
+          "scope": "regional"
+        },
+        {
+          "name": "AZURE-YQB",
+          "city": "Quebec City",
+          "country": "CA",
+          "region": "canadaeast",
+          "target": "canadaeast.handler.control.monitor.azure.com",
+          "protocol": "tcp",
+          "port": 443,
+          "scope": "regional"
+        },
+        {
+          "name": "AZURE-QRO",
+          "city": "Queretaro",
+          "country": "MX",
+          "region": "mexicocentral",
+          "target": "mexicocentral.handler.control.monitor.azure.com",
+          "protocol": "tcp",
+          "port": 443,
+          "scope": "regional"
+        },
+        {
+          "name": "AZURE-GRU",
+          "city": "Sao Paulo",
+          "country": "BR",
+          "region": "brazilsouth",
+          "target": "brazilsouth.handler.control.monitor.azure.com",
+          "protocol": "tcp",
+          "port": 443,
+          "scope": "regional"
+        },
+        {
+          "name": "AZURE-SCL",
+          "city": "Santiago",
+          "country": "CL",
+          "region": "chilecentral",
+          "target": "chilecentral.handler.control.monitor.azure.com",
+          "protocol": "tcp",
+          "port": 443,
+          "scope": "regional"
+        },
+        {
+          "name": "AZURE-DUB",
+          "city": "Dublin",
+          "country": "IE",
+          "region": "northeurope",
+          "target": "northeurope.handler.control.monitor.azure.com",
+          "protocol": "tcp",
+          "port": 443,
+          "scope": "regional"
+        },
+        {
+          "name": "AZURE-AMS",
+          "city": "Amsterdam",
+          "country": "NL",
+          "region": "westeurope",
+          "target": "westeurope.handler.control.monitor.azure.com",
+          "protocol": "tcp",
+          "port": 443,
+          "scope": "regional"
+        },
+        {
+          "name": "AZURE-LHR",
+          "city": "London",
+          "country": "GB",
+          "region": "uksouth",
+          "target": "uksouth.handler.control.monitor.azure.com",
+          "protocol": "tcp",
+          "port": 443,
+          "scope": "regional"
+        },
+        {
+          "name": "AZURE-PAR",
+          "city": "Paris",
+          "country": "FR",
+          "region": "francecentral",
+          "target": "francecentral.handler.control.monitor.azure.com",
+          "protocol": "tcp",
+          "port": 443,
+          "scope": "regional"
+        },
+        {
+          "name": "AZURE-FRA",
+          "city": "Frankfurt",
+          "country": "DE",
+          "region": "germanywestcentral",
+          "target": "germanywestcentral.handler.control.monitor.azure.com",
+          "protocol": "tcp",
+          "port": 443,
+          "scope": "regional"
+        },
+        {
+          "name": "AZURE-MAD",
+          "city": "Madrid",
+          "country": "ES",
+          "region": "spaincentral",
+          "target": "spaincentral.handler.control.monitor.azure.com",
+          "protocol": "tcp",
+          "port": 443,
+          "scope": "regional"
+        },
+        {
+          "name": "AZURE-TYO",
+          "city": "Tokyo",
+          "country": "JP",
+          "region": "japaneast",
+          "target": "japaneast.handler.control.monitor.azure.com",
+          "protocol": "tcp",
+          "port": 443,
+          "scope": "regional"
+        },
+        {
+          "name": "AZURE-SIN",
+          "city": "Singapore",
+          "country": "SG",
+          "region": "southeastasia",
+          "target": "southeastasia.handler.control.monitor.azure.com",
+          "protocol": "tcp",
+          "port": 443,
+          "scope": "regional"
+        },
+        {
+          "name": "AZURE-SYD",
+          "city": "Sydney",
+          "country": "AU",
+          "region": "australiaeast",
+          "target": "australiaeast.handler.control.monitor.azure.com",
+          "protocol": "tcp",
+          "port": 443,
+          "scope": "regional"
+        },
+        {
+          "name": "AZURE-JNB",
+          "city": "Johannesburg",
+          "country": "ZA",
+          "region": "southafricanorth",
+          "target": "southafricanorth.handler.control.monitor.azure.com",
+          "protocol": "tcp",
+          "port": 443,
+          "scope": "regional"
+        }
+      ]
+    },
+
+    {
+      "provider": "ORACLE",
+      "asn": 31898,
+      "targets": [
+        {
+          "name": "OCI-BOG",
+          "city": "Bogota",
+          "country": "CO",
+          "region": "sa-bogota-1",
+          "target": "objectstorage.sa-bogota-1.oraclecloud.com",
+          "protocol": "tcp",
+          "port": 443,
+          "scope": "regional"
+        },
+        {
+          "name": "OCI-GRU",
+          "city": "Sao Paulo",
+          "country": "BR",
+          "region": "sa-saopaulo-1",
+          "target": "objectstorage.sa-saopaulo-1.oraclecloud.com",
+          "protocol": "tcp",
+          "port": 443,
+          "scope": "regional"
+        },
+        {
+          "name": "OCI-VCP",
+          "city": "Vinhedo",
+          "country": "BR",
+          "region": "sa-vinhedo-1",
+          "target": "objectstorage.sa-vinhedo-1.oraclecloud.com",
+          "protocol": "tcp",
+          "port": 443,
+          "scope": "regional"
+        },
+        {
+          "name": "OCI-SCL",
+          "city": "Santiago",
+          "country": "CL",
+          "region": "sa-santiago-1",
+          "target": "objectstorage.sa-santiago-1.oraclecloud.com",
+          "protocol": "tcp",
+          "port": 443,
+          "scope": "regional"
+        },
+        {
+          "name": "OCI-VAP",
+          "city": "Valparaiso",
+          "country": "CL",
+          "region": "sa-valparaiso-1",
+          "target": "objectstorage.sa-valparaiso-1.oraclecloud.com",
+          "protocol": "tcp",
+          "port": 443,
+          "scope": "regional"
+        },
+        {
+          "name": "OCI-QRO",
+          "city": "Queretaro",
+          "country": "MX",
+          "region": "mx-queretaro-1",
+          "target": "objectstorage.mx-queretaro-1.oraclecloud.com",
+          "protocol": "tcp",
+          "port": 443,
+          "scope": "regional"
+        },
+        {
+          "name": "OCI-MTY",
+          "city": "Monterrey",
+          "country": "MX",
+          "region": "mx-monterrey-1",
+          "target": "objectstorage.mx-monterrey-1.oraclecloud.com",
+          "protocol": "tcp",
+          "port": 443,
+          "scope": "regional"
+        },
+        {
+          "name": "OCI-IAD",
+          "city": "Ashburn",
+          "country": "US",
+          "region": "us-ashburn-1",
+          "target": "objectstorage.us-ashburn-1.oraclecloud.com",
+          "protocol": "tcp",
+          "port": 443,
+          "scope": "regional"
+        },
+        {
+          "name": "OCI-ORD",
+          "city": "Chicago",
+          "country": "US",
+          "region": "us-chicago-1",
+          "target": "objectstorage.us-chicago-1.oraclecloud.com",
+          "protocol": "tcp",
+          "port": 443,
+          "scope": "regional"
+        },
+        {
+          "name": "OCI-PHX",
+          "city": "Phoenix",
+          "country": "US",
+          "region": "us-phoenix-1",
+          "target": "objectstorage.us-phoenix-1.oraclecloud.com",
+          "protocol": "tcp",
+          "port": 443,
+          "scope": "regional"
+        },
+        {
+          "name": "OCI-SJC",
+          "city": "San Jose",
+          "country": "US",
+          "region": "us-sanjose-1",
+          "target": "objectstorage.us-sanjose-1.oraclecloud.com",
+          "protocol": "tcp",
+          "port": 443,
+          "scope": "regional"
+        },
+        {
+          "name": "OCI-YYZ",
+          "city": "Toronto",
+          "country": "CA",
+          "region": "ca-toronto-1",
+          "target": "objectstorage.ca-toronto-1.oraclecloud.com",
+          "protocol": "tcp",
+          "port": 443,
+          "scope": "regional"
+        },
+        {
+          "name": "OCI-YUL",
+          "city": "Montreal",
+          "country": "CA",
+          "region": "ca-montreal-1",
+          "target": "objectstorage.ca-montreal-1.oraclecloud.com",
+          "protocol": "tcp",
+          "port": 443,
+          "scope": "regional"
+        },
+        {
+          "name": "OCI-MAD",
+          "city": "Madrid",
+          "country": "ES",
+          "region": "eu-madrid-1",
+          "target": "objectstorage.eu-madrid-1.oraclecloud.com",
+          "protocol": "tcp",
+          "port": 443,
+          "scope": "regional"
+        },
+        {
+          "name": "OCI-FRA",
+          "city": "Frankfurt",
+          "country": "DE",
+          "region": "eu-frankfurt-1",
+          "target": "objectstorage.eu-frankfurt-1.oraclecloud.com",
+          "protocol": "tcp",
+          "port": 443,
+          "scope": "regional"
+        },
+        {
+          "name": "OCI-LHR",
+          "city": "London",
+          "country": "GB",
+          "region": "uk-london-1",
+          "target": "objectstorage.uk-london-1.oraclecloud.com",
+          "protocol": "tcp",
+          "port": 443,
+          "scope": "regional"
+        },
+        {
+          "name": "OCI-PAR",
+          "city": "Paris",
+          "country": "FR",
+          "region": "eu-paris-1",
+          "target": "objectstorage.eu-paris-1.oraclecloud.com",
+          "protocol": "tcp",
+          "port": 443,
+          "scope": "regional"
+        },
+        {
+          "name": "OCI-AMS",
+          "city": "Amsterdam",
+          "country": "NL",
+          "region": "eu-amsterdam-1",
+          "target": "objectstorage.eu-amsterdam-1.oraclecloud.com",
+          "protocol": "tcp",
+          "port": 443,
+          "scope": "regional"
+        },
+        {
+          "name": "OCI-TYO",
+          "city": "Tokyo",
+          "country": "JP",
+          "region": "ap-tokyo-1",
+          "target": "objectstorage.ap-tokyo-1.oraclecloud.com",
+          "protocol": "tcp",
+          "port": 443,
+          "scope": "regional"
+        },
+        {
+          "name": "OCI-SIN",
+          "city": "Singapore",
+          "country": "SG",
+          "region": "ap-singapore-1",
+          "target": "objectstorage.ap-singapore-1.oraclecloud.com",
+          "protocol": "tcp",
+          "port": 443,
+          "scope": "regional"
+        },
+        {
+          "name": "OCI-SYD",
+          "city": "Sydney",
+          "country": "AU",
+          "region": "ap-sydney-1",
+          "target": "objectstorage.ap-sydney-1.oraclecloud.com",
+          "protocol": "tcp",
+          "port": 443,
+          "scope": "regional"
+        },
+        {
+          "name": "OCI-JNB",
+          "city": "Johannesburg",
+          "country": "ZA",
+          "region": "af-johannesburg-1",
+          "target": "objectstorage.af-johannesburg-1.oraclecloud.com",
+          "protocol": "tcp",
+          "port": 443,
+          "scope": "regional"
+        }
+      ]
+    },
+
+    {
+      "provider": "IBM",
+      "asn": 36351,
+      "targets": [
+        {
+          "name": "IBM-CLOUD-GLOBAL",
+          "target": "cloud.ibm.com",
+          "protocol": "https",
+          "port": 443,
+          "scope": "edge"
+        },
+        {
+          "name": "IBM-GRU",
+          "city": "Sao Paulo",
+          "country": "BR",
+          "region": "br-sao",
+          "target": "s3.br-sao.cloud-object-storage.appdomain.cloud",
+          "protocol": "tcp",
+          "port": 443,
+          "scope": "regional"
+        },
+        {
+          "name": "IBM-DFW",
+          "city": "Dallas",
+          "country": "US",
+          "region": "us-south",
+          "target": "s3.us-south.cloud-object-storage.appdomain.cloud",
+          "protocol": "tcp",
+          "port": 443,
+          "scope": "regional"
+        },
+        {
+          "name": "IBM-IAD",
+          "city": "Washington DC",
+          "country": "US",
+          "region": "us-east",
+          "target": "s3.us-east.cloud-object-storage.appdomain.cloud",
+          "protocol": "tcp",
+          "port": 443,
+          "scope": "regional"
+        },
+        {
+          "name": "IBM-YYZ",
+          "city": "Toronto",
+          "country": "CA",
+          "region": "ca-tor",
+          "target": "s3.ca-tor.cloud-object-storage.appdomain.cloud",
+          "protocol": "tcp",
+          "port": 443,
+          "scope": "regional"
+        },
+        {
+          "name": "IBM-YUL",
+          "city": "Montreal",
+          "country": "CA",
+          "region": "ca-mon",
+          "target": "s3.ca-mon.cloud-object-storage.appdomain.cloud",
+          "protocol": "tcp",
+          "port": 443,
+          "scope": "regional"
+        },
+        {
+          "name": "IBM-MAD",
+          "city": "Madrid",
+          "country": "ES",
+          "region": "eu-es",
+          "target": "s3.eu-es.cloud-object-storage.appdomain.cloud",
+          "protocol": "tcp",
+          "port": 443,
+          "scope": "regional"
+        },
+        {
+          "name": "IBM-FRA",
+          "city": "Frankfurt",
+          "country": "DE",
+          "region": "eu-de",
+          "target": "s3.eu-de.cloud-object-storage.appdomain.cloud",
+          "protocol": "tcp",
+          "port": 443,
+          "scope": "regional"
+        },
+        {
+          "name": "IBM-LHR",
+          "city": "London",
+          "country": "GB",
+          "region": "eu-gb",
+          "target": "s3.eu-gb.cloud-object-storage.appdomain.cloud",
+          "protocol": "tcp",
+          "port": 443,
+          "scope": "regional"
+        },
+        {
+          "name": "IBM-TYO",
+          "city": "Tokyo",
+          "country": "JP",
+          "region": "jp-tok",
+          "target": "s3.jp-tok.cloud-object-storage.appdomain.cloud",
+          "protocol": "tcp",
+          "port": 443,
+          "scope": "regional"
+        },
+        {
+          "name": "IBM-SYD",
+          "city": "Sydney",
+          "country": "AU",
+          "region": "au-syd",
+          "target": "s3.au-syd.cloud-object-storage.appdomain.cloud",
+          "protocol": "tcp",
+          "port": 443,
+          "scope": "regional"
+        }
+      ]
+    }
+  ]
+}

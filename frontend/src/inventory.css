@@ -1,0 +1,296 @@
+.inventory-top {
+  display: grid;
+  grid-template-columns: minmax(0, 2fr) minmax(260px, 1fr);
+  gap: 20px;
+  margin: 24px 0;
+}
+.inventory-top > .panel {
+  min-width: 0;
+}
+.pop-map {
+  height: 390px;
+  border-radius: 8px;
+  background: var(--wash);
+  margin: 15px 0;
+  z-index: 0;
+}
+.picking .pop-map {
+  cursor: crosshair;
+}
+.button-row,
+.tab-row {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+  align-items: center;
+}
+.button-row button,
+.tab-row button {
+  font-size: 12px;
+  padding: 10px 13px;
+}
+.tab-row {
+  border-bottom: 1px solid var(--border);
+  padding-bottom: 18px;
+  margin-bottom: 20px;
+}
+.spaced {
+  margin-top: 20px;
+}
+.field-pair {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+}
+.field-pair > label {
+  min-width: 0;
+}
+textarea {
+  font: inherit;
+  background: var(--input);
+  color: var(--text);
+  border: 1px solid var(--border);
+  border-radius: 7px;
+  padding: 11px;
+  resize: vertical;
+  min-height: 75px;
+}
+.pop-list {
+  display: grid;
+  gap: 8px;
+  max-height: 430px;
+  overflow: auto;
+}
+.pop-row {
+  background: var(--subtle);
+  color: var(--text);
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+  text-align: left;
+}
+.pop-row small {
+  width: 100%;
+}
+.inventory-filters {
+  display: flex;
+  gap: 15px;
+  flex-wrap: wrap;
+  margin-bottom: 20px;
+}
+.inventory-filters form {
+  display: flex;
+  gap: 8px;
+  flex: 2;
+}
+.inventory-filters > select {
+  flex: 1;
+  min-width: 150px;
+}
+.table-scroll {
+  overflow: auto;
+}
+table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13px;
+}
+th,
+td {
+  text-align: left;
+  padding: 14px 10px;
+  border-bottom: 1px solid var(--border);
+  vertical-align: top;
+}
+th {
+  color: var(--muted);
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+}
+td select {
+  min-width: 130px;
+}
+td small {
+  line-height: 1.7;
+}
+td > div + div {
+  margin-top: 10px;
+}
+.device-name {
+  color: var(--blue);
+  font-weight: 650;
+  text-align: left;
+  padding: 0;
+  font-size: 13px;
+}
+.candidate {
+  padding: 20px 0;
+  border-bottom: 1px solid var(--border);
+  overflow-wrap: anywhere;
+}
+.candidate > .badge {
+  margin-left: 12px;
+}
+.candidate p {
+  margin: 8px 0;
+}
+.link-form {
+  display: flex;
+  gap: 15px;
+  flex-wrap: wrap;
+  align-items: end;
+  margin-bottom: 15px;
+}
+.link-form label {
+  flex: 1;
+  min-width: 160px;
+  margin: 0;
+}
+.checkbox-label {
+  flex-direction: row;
+  align-items: center;
+}
+.checkbox-label input {
+  width: auto;
+}
+.inventory-bottom {
+  margin-top: 20px;
+}
+.leaflet-container {
+  font-family: inherit;
+}
+.leaflet-control-attribution {
+  font-size: 10px;
+}
+.pop-editor > p {
+  overflow-wrap: anywhere;
+}
+.pop-editor form .secondary {
+  font-size: 12px;
+  width: 100%;
+}
+.inventory-top .title-row {
+  flex-wrap: wrap;
+}
+.inventory-top .title-row h2 {
+  margin: 0;
+}
+input:focus-visible,
+textarea:focus-visible {
+  outline: 2px solid var(--blue);
+  outline-offset: 2px;
+}
+.leaflet-container a {
+  color: #124e88;
+}
+.leaflet-container .leaflet-control-zoom a {
+  background: #fff;
+  color: #082e54;
+}
+.leaflet-tooltip {
+  color: #082e54;
+}
+@media (max-width: 1100px) {
+  .inventory-top {
+    grid-template-columns: 1fr;
+  }
+  .pop-map {
+    height: 340px;
+  }
+  .inventory-filters form {
+    min-width: 220px;
+  }
+  .pop-editor {
+    max-width: none;
+  }
+}
+@media (max-width: 700px) {
+  .pop-map {
+    height: 300px;
+  }
+  .inventory-top .panel,
+  .inventory-bottom {
+    padding: 16px;
+  }
+  .table-scroll {
+    max-width: 100%;
+  }
+  .tab-row {
+    gap: 6px;
+  }
+  .tab-row button {
+    padding: 8px;
+  }
+  .inventory-filters form {
+    min-width: 0;
+    width: 100%;
+    flex-basis: 100%;
+  }
+  .inventory-filters input {
+    min-width: 0;
+  }
+  .link-form {
+    display: block;
+  }
+  .link-form label {
+    margin: 15px 0;
+  }
+  .inventory-top {
+    gap: 12px;
+  }
+}
+
+.link-form .device-select { flex: 1; min-width: 180px; }
+.device-select label { display: flex; flex-direction: column; gap: 8px; }
+.device-select small { display: block; margin-top: 6px; }
+
+.device-select { position: relative; }
+.device-combobox { position: relative; margin-top: 8px; }
+.device-combobox input { width: 100%; padding-right: 40px; }
+.device-combobox .device-toggle { position: absolute; right: 1px; top: 1px; bottom: 1px; background: transparent; color: var(--text); padding: 0 12px; }
+.device-dropdown { position: absolute; top: 100%; left: 0; right: 0; z-index: 20; background: var(--input); border: 1px solid var(--border); border-radius: 8px; box-shadow: 0 8px 24px #0003; padding: 6px; }
+.device-dropdown [role="listbox"] { max-height: 240px; overflow-y: auto; }
+.device-dropdown [role="option"] { display: block; width: 100%; text-align: left; background: transparent; color: var(--text); padding: 10px; overflow-wrap: anywhere; }
+.device-dropdown [role="option"]:hover, .device-dropdown [role="option"].active { background: var(--wash); }
+.device-dropdown > small { padding: 10px; }
+
+.link-endpoint { flex: 1; min-width: 200px; display: grid; gap: 16px; }
+.link-form { align-items: start; }
+.vlan-trigger { width: 100%; margin-top: 8px; text-align: left; background: var(--input); color: var(--text); border: 1px solid var(--border); }
+.vlan-options { max-height: 220px; overflow-y: auto; margin: 8px 0; }
+.vlan-options label { display: flex; flex-direction: row; align-items: center; min-width: 0; gap: 8px; padding: 8px; }
+.vlan-options input { width: auto; }
+.leaflet-tooltip.link-tooltip {
+  width: 300px;
+  max-width: calc(100vw - 72px);
+  padding: 14px 16px;
+  white-space: normal;
+  overflow-wrap: anywhere;
+  word-break: normal;
+  font-size: 13px;
+  line-height: 1.5;
+  background: var(--surface);
+  color: var(--text);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  box-shadow: 0 4px 16px #0003;
+}
+.link-tooltip-content { display: grid; gap: 10px; }
+.link-tooltip-endpoint strong, .link-tooltip-endpoint small { display: block; line-height: 1.5; }
+.link-tooltip-endpoint strong { font-size: 13px; }
+.link-tooltip-endpoint small { font-size: 12px; margin-top: 2px; color: var(--muted); }
+.link-tooltip-vlans { padding-top: 8px; border-top: 1px solid var(--border); }
+.link-tooltip-description { font-size: 12px; color: var(--muted); }
+.leaflet-tooltip-left.link-tooltip::before { border-left-color: var(--surface); }
+.leaflet-tooltip-right.link-tooltip::before { border-right-color: var(--surface); }
+.link-form .vlan-select { min-width: 190px; }
+.link-form > button { margin-top: 24px; }
+
+.manual-reconciliation { margin-bottom: 20px; border-bottom: 1px solid var(--border); padding-bottom: 20px; }
+.manual-reconciliation summary { cursor: pointer; font-weight: 600; padding: 10px 0; }
+.reconciliation-pair { display: grid; grid-template-columns: minmax(0,1fr) minmax(0,1fr); gap: 20px; margin: 16px 0; }
+.identity-comparison { border: 1px solid var(--border); border-radius: 8px; padding: 14px; overflow-wrap: anywhere; }
+.identity-comparison > small { display: block; margin-top: 6px; }
+@media (max-width:700px) { .reconciliation-pair { grid-template-columns: minmax(0,1fr); } }

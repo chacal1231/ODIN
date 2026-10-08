@@ -1,0 +1,28 @@
+name: odin-isp-tests
+services:
+  db:
+    image: postgres:17-alpine
+    environment:
+      POSTGRES_DB: odin_test
+      POSTGRES_USER: odin_test
+      POSTGRES_HOST_AUTH_METHOD: trust
+    tmpfs: /var/lib/postgresql/data
+    healthcheck:
+      test: [CMD-SHELL, 'pg_isready -U odin_test -d odin_test']
+      interval: 2s
+      timeout: 3s
+      retries: 30
+  tests:
+    build: ./backend
+    environment:
+      ODIN_DATABASE_URL: postgresql+psycopg://odin_test@db:5432/odin_test
+      ODIN_MASTER_KEY_FILE: /run/secrets/master.key
+      ODIN_ORIGIN: http://localhost:8080
+      ODIN_SECURE_COOKIES: 'false'
+    volumes:
+      - ./.secrets/master.key:/run/secrets/master.key:ro
+      - ./backend:/app:ro
+    depends_on:
+      db:
+        condition: service_healthy
+    command: [sh, -c, 'alembic upgrade head && python -m pytest -q -p no:cacheprovider tests']

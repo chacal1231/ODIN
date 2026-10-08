@@ -1,0 +1,103 @@
+name: odin-isp
+services:
+  db:
+    image: postgres:17-alpine
+    environment:
+      POSTGRES_DB: odin
+      POSTGRES_USER: odin
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Ejecuta scripts/setup-local.sh}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: [CMD-SHELL, 'pg_isready -U odin -d odin']
+      interval: 5s
+      timeout: 3s
+      retries: 20
+    restart: unless-stopped
+  migrate:
+    build: ./backend
+    env_file: .env
+    volumes:
+      - ./.secrets/master.key:/run/secrets/master.key:ro
+    command: [alembic, upgrade, head]
+    depends_on:
+      db:
+        condition: service_healthy
+  api:
+    build: ./backend
+    env_file: .env
+    volumes:
+      - ./.secrets/master.key:/run/secrets/master.key:ro
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+    healthcheck:
+      test: [CMD, python, -c, "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/api/v1/health/ready')"]
+      interval: 15s
+      timeout: 5s
+      retries: 3
+    restart: unless-stopped
+  worker:
+    build: ./backend
+    env_file: .env
+    volumes:
+      - ./.secrets/master.key:/run/secrets/master.key:ro
+    command: [python, -m, odin.worker]
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+    restart: unless-stopped
+  analyst:
+    build: ./backend
+    env_file: .env
+    volumes:
+      - ./.secrets/master.key:/run/secrets/master.key:ro
+    command: [python, -m, odin.analyst.worker]
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+    restart: unless-stopped
+  telegram:
+    build: ./backend
+    env_file: .env
+    volumes:
+      - ./.secrets/master.key:/run/secrets/master.key:ro
+    command: [python, -m, odin.telegram]
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+    restart: unless-stopped
+  probe:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile.probe
+    env_file: .env
+    volumes:
+      - ./.secrets/master.key:/run/secrets/master.key:ro
+    cap_drop: [ALL]
+    cap_add: [NET_RAW]
+    security_opt: [no-new-privileges:true]
+    read_only: true
+    tmpfs: [/tmp]
+    mem_limit: 1g
+    pids_limit: 128
+    cpus: 2.0
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+    healthcheck:
+      test: [CMD, python, -m, odin.probes.health]
+      interval: 15s
+      timeout: 5s
+      retries: 3
+    restart: unless-stopped
+  web:
+    build: ./frontend
+    ports:
+      - '127.0.0.1:${ODIN_WEB_PORT:-8080}:8080'
+    depends_on:
+      api:
+        condition: service_healthy
+    restart: unless-stopped
+volumes:
+  postgres_data:

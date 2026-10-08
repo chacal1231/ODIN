@@ -1,0 +1,147 @@
+"""Persist a reviewed hyperscaler catalog; validate before activating targets."""
+import argparse
+from concurrent.futures import ThreadPoolExecutor
+import hashlib
+import ipaddress
+import json
+from pathlib import Path
+from pydantic import BaseModel,Field,ConfigDict,model_validator
+from sqlalchemy import select,func
+from ..db import session
+from ..models import ProbeCatalog,ProbeTarget,ProbeProfileVersion,now,uid
+from ..security import audit
+from .config import (host,TransportConfig,DEFAULT_VERSION_ID,TRANSPORT_VERSION_ID,seed_defaults)
+from .organization import ensure_destination
+from .service import lock,capacity,next_slot,snapshot
+from .resolver import resolve_task,ProbeError
+from . import fping,transport
+
+PROVIDERS={'AWS':'AWS','GOOGLE':'GCP','MICROSOFT':'Azure','ORACLE':'Oracle','IBM':'IBM'}
+
+
+class CatalogTarget(BaseModel):
+    model_config=ConfigDict(extra='forbid')
+    name:str=Field(min_length=1,max_length=120)
+    target:str=Field(min_length=1,max_length=253)
+    protocol:str=Field(pattern='^(icmp|icmp6|tcp|https)$')
+    port:int|None=Field(default=None,ge=1,le=65535)
+    city:str|None=None
+    country:str|None=Field(default=None,pattern='^[A-Z]{2}$')
+    region:str|None=None
+    scope:str=Field(pattern='^(regional|anycast|edge|api)$')
+
+    @model_validator(mode='after')
+    def valid(self):
+        self.target=host(self.target)
+        if self.protocol in ('tcp','https') and self.port is None:raise ValueError('Falta puerto')
+        return self
+
+
+class Provider(BaseModel):
+    model_config=ConfigDict(extra='forbid')
+    provider:str
+    asn:int=Field(ge=1,le=4294967295)
+    targets:list[CatalogTarget]=Field(min_length=1,max_length=200)
+
+
+class Catalog(BaseModel):
+    model_config=ConfigDict(extra='forbid')
+    category:str=Field(pattern='^HYPERSCALERS$')
+    version:int=Field(ge=1)
+    providers:list[Provider]=Field(min_length=1,max_length=20)
+
+    @model_validator(mode='after')
+    def valid(self):
+        names=[t.name.casefold() for p in self.providers for t in p.targets]
+        if len(names)!=len(set(names)) or len(names)>200:raise ValueError('Destinos duplicados o demasiados')
+        providers=[p.provider for p in self.providers]
+        if len(providers)!=len(set(providers)) or set(providers)-set(PROVIDERS):raise ValueError('Proveedor no válido')
+        return self
+
+
+def persist(document):
+    catalog=Catalog(**document);digest=hashlib.sha256(json.dumps(document,sort_keys=True).encode()).hexdigest()
+    ids=[]
+    with session() as db:
+        seed_defaults(db);lock(db)
+        source=db.get(ProbeCatalog,'hyperscalers')
+        if source and (source.version!=catalog.version or source.digest!=digest):
+            raise ValueError('El catálogo guardado difiere. Requiere una migración explícita para conservar ediciones.')
+        if not source:db.add(ProbeCatalog(id='hyperscalers',version=catalog.version,document=document,digest=digest))
+        for provider in catalog.providers:
+            for item in provider.targets:
+                key=f'hyperscalers:{provider.provider}:{item.name}'
+                target=db.scalar(select(ProbeTarget).where(ProbeTarget.catalog_key==key))
+                if target:
+                    if not target.archived:ids.append(target.id)
+                    continue
+                if db.scalar(select(ProbeTarget.id).where(func.lower(ProbeTarget.name)==item.name.lower(),ProbeTarget.archived.is_(False))):
+                    raise ValueError('Ya existe un destino con el nombre '+item.name)
+                protocol='icmp' if item.protocol=='icmp6' else item.protocol
+                version=DEFAULT_VERSION_ID if protocol=='icmp' else TRANSPORT_VERSION_ID
+                categories=['hyperscalers']
+                if item.name.startswith('GOOGLE-DNS'):categories.append('dns')
+                if item.name=='GOOGLE-WEB':categories.append('search_ai')
+                if item.name=='MICROSOFT-365':categories.append('saas')
+                target=ProbeTarget(id=uid(),name=item.name,address=item.target,family='ipv6' if item.protocol=='icmp6' else 'ipv4',
+                    protocol=protocol,check_config=TransportConfig(port=item.port or 443).model_dump() if protocol!='icmp' else {},
+                    dns_policy='public_dns',catalog_key=key,catalog_metadata={
+                        'provider':PROVIDERS[provider.provider],'asn_reference':provider.asn,'region':item.region,
+                        'city':item.city,'country':item.country,'scope':item.scope,'catalog_version':catalog.version,
+                        'measurement_scope':'endpoint_connectivity'},
+                    validation={'status':'pending'},categories=categories,service=PROVIDERS[provider.provider],
+                    description='Conectividad al endpoint del servicio; no representa toda la región.',
+                    profile_version_id=version,effective=dict(db.get(ProbeProfileVersion,version).config),
+                    overrides={},approved_ips=[],enabled=False,epoch=1,version=1)
+                db.add(target);ensure_destination(db,target);db.flush();ids.append(target.id)
+                audit(db,'probe_catalog_target_created',None,target.id)
+        if db.scalar(select(func.count()).select_from(ProbeTarget).where(ProbeTarget.archived.is_(False)))>200:
+            raise ValueError('Límite de 200 destinos registrados')
+        audit(db,'probe_catalog_imported',None,'hyperscalers');db.commit()
+    return ids
+
+
+def validate_one(key,activate):
+    with session() as db:
+        target=db.get(ProbeTarget,key)
+        # Re-runs preserve operator changes, paused validated targets and archived targets.
+        if not target or target.archived or target.enabled or (target.validation.get('status')=='validated' and (not activate or target.validation.get('activation_requested'))):
+            return {'id':key,'status':'preserved'}
+        version=target.version
+        task={'address':target.address,'family':target.family,'approved_ips':target.approved_ips,
+              'dns_policy':target.dns_policy,'config':snapshot(target)}
+    addresses=[];results={};error=None
+    try:
+        addresses=resolve_task(task)
+        results=fping.run(addresses,task['config']) if task['config'].get('protocol','icmp')=='icmp' else transport.run(addresses,task['address'],task['config'])
+        if not results or any(r['received']!=r['sent'] for r in results.values()):error='endpoint_check_failed'
+    except ProbeError as exc:error=exc.code
+    except Exception:error='validation_failed'
+    with session() as db:
+        lock(db)
+        target=db.scalar(select(ProbeTarget).where(ProbeTarget.id==key).with_for_update())
+        if target.version!=version or target.archived:return {'id':key,'status':'configuration_changed'}
+        target.validation={'status':'failed' if error else 'validated','at':now(),'error':error,'activation_requested':activate,
+            'addresses':addresses,'rounds':[{'address':ip,**r} for ip,r in results.items()]}
+        target.approved_ips=addresses;target.resolved_ips=addresses;target.resolved_at=now()
+        if not error and activate:
+            target.enabled=True;target.next_due=next_slot(target,now());db.flush()
+            try:capacity(db)
+            except ValueError:
+                target.enabled=False;error='probe_capacity';target.validation={**target.validation,'status':'failed','error':error}
+        target.version+=1;audit(db,'probe_catalog_target_validated',None,key);db.commit()
+        return {'name':target.name,'status':target.validation['status'],'enabled':target.enabled,'error':error}
+
+
+def main():
+    parser=argparse.ArgumentParser(description=__doc__)
+    parser.add_argument('path',nargs='?',default=str(Path(__file__).parent/'data'/'hyperscalers-v1.json'))
+    parser.add_argument('--activate',action='store_true')
+    args=parser.parse_args();document=json.loads(Path(args.path).read_text())
+    ids=persist(document)
+    print(json.dumps({'stored':len(ids)}),flush=True)
+    with ThreadPoolExecutor(max_workers=6) as pool:
+        for result in pool.map(lambda key:validate_one(key,args.activate),ids):print(json.dumps(result),flush=True)
+
+
+if __name__=='__main__':main()

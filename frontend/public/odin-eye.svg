@@ -1,0 +1,17 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 800 580" fill="none">
+<title>Ojo de ODIN y sus dos cuervos</title>
+<g stroke="#87B8EB" stroke-width="1" opacity=".3">
+<path d="M400 12V570M70 300H730M95 120L705 475M95 475L705 120M185 80L615 510M185 510L615 80"/>
+</g>
+<g fill="#87B8EB" opacity=".7"><circle cx="400" cy="12" r="3"/><circle cx="400" cy="570" r="3"/><circle cx="70" cy="300" r="3"/><circle cx="730" cy="300" r="3"/><circle cx="95" cy="120" r="3"/><circle cx="705" cy="120" r="3"/><circle cx="95" cy="475" r="3"/><circle cx="705" cy="475" r="3"/></g>
+<g fill="#F5A623" opacity=".45"><circle cx="185" cy="80" r="2.5"/><circle cx="615" cy="80" r="2.5"/><circle cx="185" cy="510" r="2.5"/><circle cx="615" cy="510" r="2.5"/></g>
+<g stroke="#245D91" stroke-width="2"><path d="M400 77V148M317 94L337 157M239 133L278 189M551 133L512 189M483 94L463 157M200 190L233 229M600 190L566 229M292 415L262 457M343 441L324 490M400 450V508M456 441L477 490M507 417L537 457"/></g>
+<path d="M172 300Q400-5 628 300Q400 605 172 300Z" fill="#FFFFFF" stroke="#082E54" stroke-width="3"/>
+<path d="M190 300Q400 25 610 300Q400 575 190 300Z" fill="#E5F1FC"/>
+<circle cx="400" cy="300" r="111" fill="#87B8EB"/><circle cx="400" cy="300" r="69" fill="#082E54"/>
+<circle cx="400" cy="300" r="33" fill="#F5A623"/><circle cx="400" cy="302" r="20" fill="#B77513"/><circle cx="400" cy="300" r="4" fill="#665124"/>
+<circle cx="389" cy="282" r="10" fill="#FFDC9C" opacity=".65"/><circle cx="415" cy="289" r="5" fill="#FFDC9C" opacity=".5"/>
+<g fill="#426483"><path d="M96 300C111 279 122 246 137 220C150 198 167 190 185 188Q192 188 197 195C181 204 173 219 171 231Q171 236 181 237L190 242C153 253 123 278 96 300Z"/><path d="M704 300C689 279 678 246 663 220C650 198 633 190 615 188Q608 188 603 195C619 204 627 219 629 231Q629 236 619 237L610 242C647 253 677 278 704 300Z"/></g>
+<g fill="#245D91"><path d="M180 192L158 225L169 217L184 200Z"/><path d="M620 192L642 225L631 217L616 200Z"/></g>
+<g fill="#F5A623" opacity=".65"><circle cx="182" cy="204" r="2.5"/><circle cx="618" cy="204" r="2.5"/><circle cx="172" cy="300" r="5"/><circle cx="628" cy="300" r="5"/><circle cx="400" cy="148" r="5"/><circle cx="400" cy="452" r="5"/></g>
+</svg>
