@@ -350,13 +350,13 @@ def router(current,admin):
     @api.post('/admin/integrations/{kind}/{action}',status_code=202)
     def request_run(kind:str,action:str,user=Depends(admin),db:Session=Depends(get_db)):
         # Graylog provides logs, not inventory: it only supports the connection test.
-        if (kind,action) not in {('zabbix','test'),('zabbix','sync'),('librenms','test'),('librenms','sync'),('graylog','test'),('llama_server','test'),('deepseek','test'),('telegram','test')}:
+        if (kind,action) not in {('zabbix','test'),('zabbix','sync'),('librenms','test'),('librenms','sync'),('graylog','test'),('llama_server','test'),('deepseek','test'),('telegram','test'),('smartolt','test')}:
             raise HTTPException(404,'Acción no disponible')
         rate_limit(db,'inventory:'+user.id,20)
         row=db.get(Integration,kind)
         if not row or not row.encrypted_secret:raise HTTPException(422,'Configura URL y token')
-        # A model API is reached by public address only; the other sources by their allowed networks.
-        if not row.allowed_networks and kind!='deepseek':raise HTTPException(422,'Configura las redes permitidas del servidor')
+        # A model API and SmartOLT are reached by public address only; the other sources by their allowed networks.
+        if not row.allowed_networks and kind not in ('deepseek','smartolt'):raise HTTPException(422,'Configura las redes permitidas del servidor')
         run=queue_run(db,kind,action,user.id);db.commit();return run_view(run)
 
     return api

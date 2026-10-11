@@ -16,7 +16,7 @@ from test_telegram import Bot, message
 
 
 def resolving(monkeypatch, *addresses):
-    monkeypatch.setattr('odin.analyst.llm.socket.getaddrinfo',
+    monkeypatch.setattr('odin.inventory.connectors.socket.getaddrinfo',
                         lambda host, port, **_: [(socket.AF_INET, socket.SOCK_STREAM, 6, '', (a, port)) for a in addresses])
 
 

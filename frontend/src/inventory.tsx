@@ -50,6 +50,7 @@ const sourceNames: Record<string, string> = {
   llama_server: "Modelo local (llama.cpp)",
   deepseek: "DeepSeek (API)",
   telegram: "Telegram · grupos del NOC y de proveedores",
+  smartolt: "SmartOLT · OLTs",
 };
 export const statusNames: Record<string, string> = {
   not_configured: "Sin configurar",
@@ -1279,9 +1280,11 @@ export function IntegrationManager({
       setBusy(false);
     }
   }
-  const supported = kind === "zabbix" || kind === "librenms" || kind === "graylog" || kind === "llama_server" || kind === "deepseek" || kind === "telegram";
+  const supported = kind === "zabbix" || kind === "librenms" || kind === "graylog" || kind === "llama_server" || kind === "deepseek" || kind === "telegram" || kind === "smartolt";
   // A model API is reached by public HTTPS address only: no allowed networks to configure.
   const api_model = kind === "deepseek";
+  // SmartOLT too: a public service, reached by its *.smartolt.com address only.
+  const public_api = api_model || kind === "smartolt";
   // Graylog supplies logs, not inventory: connection test only.
   const inventory = kind === "zabbix" || kind === "librenms";
   const latest = runs.find((x) => x.source === kind);
@@ -1308,7 +1311,7 @@ export function IntegrationManager({
             await api("/admin/integrations/" + kind, "PUT", {
               endpoint,
               secret: secret || undefined,
-              allowed_networks: api_model
+              allowed_networks: public_api
                 ? undefined
                 : networks
                     .split(",")
@@ -1339,6 +1342,8 @@ export function IntegrationManager({
                     ? "http://172.18.0.1:8081"
                     : kind === "deepseek"
                       ? "https://api.deepseek.com"
+                      : kind === "smartolt"
+                        ? "https://tuisp.smartolt.com"
                     : kind === "telegram"
                       ? "https://api.telegram.org"
                       : "https://servidor"
@@ -1359,6 +1364,8 @@ export function IntegrationManager({
                   ? "Clave de la API de llama-server"
                   : kind === "deepseek"
                     ? "API key de DeepSeek"
+                    : kind === "smartolt"
+                      ? "API key de SmartOLT (X-Token)"
                   : kind === "telegram"
                     ? "Token del bot (de @BotFather)"
                     : "Token de lectura"
@@ -1384,7 +1391,15 @@ export function IntegrationManager({
             </p>
           </>
         )}
-        {supported && !api_model && (
+        {kind === "smartolt" && (
+          <p className="notice">
+            ODIN solo lee de SmartOLT: no puede reiniciar, deshabilitar ni
+            cambiar ninguna ONU u OLT. De las ONUs no se guardan dirección,
+            contacto ni credenciales. Usa unas 30 llamadas por hora de las
+            1.000 de la cuenta. Actívalo en Monitoreo → OLTs.
+          </p>
+        )}
+        {supported && !public_api && (
           <>
             <label>
               Redes permitidas del servidor (CIDR)

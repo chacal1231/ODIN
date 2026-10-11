@@ -19,7 +19,7 @@ from .security import (hasher, DUMMY_HASH, verify_password, token, digest, encry
 app = FastAPI(title='ODIN', version='0.1.0', docs_url=None, redoc_url=None, openapi_url=None)
 COOKIE = 'odin_session'
 CHALLENGE = 'odin_challenge'
-KINDS = ('zabbix', 'librenms', 'graylog', 'llama_server', 'deepseek', 'telegram')
+KINDS = ('zabbix', 'librenms', 'graylog', 'llama_server', 'deepseek', 'telegram', 'smartolt')
 
 
 @app.exception_handler(RequestValidationError)
@@ -342,6 +342,9 @@ def save_integration(kind: str, body: IntegrationBody, user: User = Depends(admi
         raise HTTPException(404, 'Integración desconocida')
     if kind == 'deepseek' and not body.endpoint.startswith('https://'):
         raise HTTPException(422, 'La API del modelo requiere HTTPS')
+    if kind == 'smartolt':
+        from .olts.connector import endpoint_valid
+        if not endpoint_valid(body.endpoint):raise HTTPException(422, 'Usa https://tusubdominio.smartolt.com')
     from .inventory.service import lock_inventory
     lock_inventory(db)
     row = db.get(Integration, kind)
@@ -395,3 +398,6 @@ app.include_router(cases_router(current, admin))
 
 from .analyst.api import router as analyst_router
 app.include_router(analyst_router(current, admin))
+
+from .olts.api import router as olts_router
+app.include_router(olts_router(current, admin))

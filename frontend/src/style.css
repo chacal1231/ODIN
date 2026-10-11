@@ -783,3 +783,11 @@ nav button {
   margin: 0 0 0 4px;
   font-size: 10px;
 }
+th.num,
+td.num {
+  text-align: right;
+}
+.olt-critical {
+  color: var(--crit);
+  font-weight: 600;
+}

@@ -64,6 +64,30 @@ def trace_checks(db, stamp):
     return [check('tracer', 'warning', 'Trazas detenidas', detail + ' Las mediciones siguen; no hay trazas nuevas.', 'Red propia')]
 
 
+def smartolt_checks(db, stamp):
+    """SmartOLT is read every 5 minutes; a stop or the account running out of API budget must show."""
+    from .models import SmartoltState
+    integration = db.get(Integration, 'smartolt')
+    if not integration or not integration.events_enabled:
+        return []
+    row = db.get(SmartoltState, 'smartolt');result = []
+    info = ((row.tasks or {}).get('outages') or {}) if row else {}
+    since = info.get('last_success_at') or integration.updated_at
+    if stamp - since > 1200:
+        detail = ('Sin lectura de caídas de PON desde hace ' + duration(stamp - since) + '.' if info.get('last_success_at')
+                  else 'Sin lecturas exitosas desde su activación hace ' + duration(stamp - since) + '.')
+        result.append({**check('smartolt', 'critical' if stamp - since > 3600 else 'warning', 'Lectura de SmartOLT detenida', detail, 'OLTs'),
+                       'error_code': info.get('last_error'), 'failures': info.get('failures', 0)})
+    if row and row.blocked_until and row.blocked_until > stamp:
+        result.append(check('smartolt_rate', 'warning', 'SmartOLT limitó las llamadas',
+                            f'La API pidió esperar; las lecturas se reanudan en {duration(row.blocked_until - stamp)}.', 'OLTs'))
+    elif row and row.rate_limit and row.rate_remaining is not None and row.rate_observed_at and stamp - row.rate_observed_at < 3600 \
+            and row.rate_remaining < row.rate_limit * 0.1:
+        result.append(check('smartolt_rate', 'warning', 'Presupuesto de SmartOLT casi agotado',
+                            f'Quedan {row.rate_remaining} de {row.rate_limit} llamadas en esta hora. Otro sistema puede estar usando la misma cuenta.', 'OLTs'))
+    return result
+
+
 def event_checks(db, stamp):
     result = []
     rows = db.execute(select(EventCollector, Integration).join(Integration, Integration.kind == EventCollector.source)
@@ -145,6 +169,6 @@ def duration(seconds):
 
 def evaluate(db, stamp=None):
     stamp = stamp or now()
-    checks = probe_checks(db, stamp) + trace_checks(db, stamp) + event_checks(db, stamp) + correlation_checks(db, stamp) + analyst_checks(db, stamp) + job_checks(db, stamp)
+    checks = probe_checks(db, stamp) + trace_checks(db, stamp) + smartolt_checks(db, stamp) + event_checks(db, stamp) + correlation_checks(db, stamp) + analyst_checks(db, stamp) + job_checks(db, stamp)
     state = max((c['state'] for c in checks), key=RANK.get, default='healthy')
     return {'state': state, 'checks': checks, 'evaluated_at': stamp}

@@ -9,6 +9,7 @@ import { Cases } from "./cases";
 import { Chat, ChatCase } from "./chat";
 import { OperationsOverview, StatusBar, useMonitoring } from "./monitoring";
 import { Inventory, IntegrationManager, statusNames } from "./inventory";
+import { Olts } from "./olts";
 
 type User = {
   id: string;
@@ -71,12 +72,12 @@ async function api(path: string, method = "GET", body?: unknown) {
 const sections: [string, string[]][] = [
   ["", ["Inicio"]],
   ["Operación", ["Casos", "Incidentes", "Chat"]],
-  ["Monitoreo", ["Red propia", "Servicios externos"]],
+  ["Monitoreo", ["Red propia", "OLTs", "Servicios externos"]],
   ["Fuentes", ["Eventos"]],
   ["Configuración", ["Mapa e inventario", "Administración"]],
 ];
 const sectionIcons: Record<string, string> = {
-  Inicio: "◈", Casos: "⚑", Incidentes: "◷", Chat: "✉", "Red propia": "◎", "Servicios externos": "◌",
+  Inicio: "◈", Casos: "⚑", Incidentes: "◷", Chat: "✉", "Red propia": "◎", OLTs: "⊚", "Servicios externos": "◌",
   Eventos: "◇", "Mapa e inventario": "▦", Administración: "⚙",
 };
 const names: Record<string, string> = {
@@ -86,6 +87,7 @@ const names: Record<string, string> = {
   llama_server: "Modelo local (llama.cpp)",
   deepseek: "DeepSeek (API)",
   telegram: "Telegram",
+  smartolt: "SmartOLT",
 };
 
 function App() {
@@ -461,6 +463,8 @@ function App() {
               admin={user.role === "admin"}
               onError={setError}
             />
+          ) : page === "OLTs" ? (
+            <Olts api={api} zone={zone} admin={user.role === "admin"} onError={setError} />
           ) : page === "Red propia" || page === "Servicios externos" ? (
             <Destinations
               key={page}

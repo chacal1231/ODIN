@@ -10,6 +10,7 @@ from .events.service import execute_index
 from .events.collector import schedule as schedule_events, execute as execute_events
 from .cases.service import schedule as schedule_cases, execute as execute_cases
 from .analyst.service import KINDS as ANALYST_KINDS
+from .olts.service import schedule as schedule_olts, execute as execute_olts
 
 stop = threading.Event()
 
@@ -29,6 +30,7 @@ def main():
                 schedule(db)
                 schedule_events(db)
                 schedule_cases(db)
+                schedule_olts(db)
                 # Model runs take minutes: the analyst process owns them.
                 job = claim(db, exclude=ANALYST_KINDS)
                 if job:
@@ -38,6 +40,8 @@ def main():
                         execute_events(job.id, job.lease_token)
                     elif job.kind == 'correlate':
                         execute_cases(job.id, job.lease_token)
+                    elif job.kind == 'smartolt_poll':
+                        execute_olts(job.id, job.lease_token)
                     elif job.kind == 'event_index':
                         execute_index(job.id, job.lease_token)
                     elif job.kind == 'healthcheck':

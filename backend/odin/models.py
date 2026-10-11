@@ -727,3 +727,109 @@ class TelegramQuestion(Base):
     message_id = Column(BigInteger, nullable=False)
     thread_id = Column(BigInteger)
     created_at = Column(BigInteger, nullable=False)
+
+
+class Olt(Base):
+    """An OLT as SmartOLT reports it, with the inventory device and POP it belongs to."""
+    __tablename__ = 'olts'
+    id = Column(String(40), primary_key=True)  # SmartOLT's OLT ID
+    name = Column(String(200), nullable=False)
+    hardware = Column(String(120), nullable=False, default='')
+    ip = Column(String(45))
+    device_id = Column(ForeignKey('devices.id'))  # matched by address with the inventory
+    pop_id = Column(ForeignKey('pops.id'))
+    pop_manual = Column(Boolean, nullable=False, default=False)  # set by an administrator: inventory moves do not change it
+    uptime_seconds = Column(BigInteger)
+    temperature = Column(Float)
+    reachable = Column(Boolean, nullable=False, default=True)
+    present = Column(Boolean, nullable=False, default=True)
+    first_seen = Column(BigInteger, nullable=False, default=now)
+    last_seen = Column(BigInteger, nullable=False)
+
+
+class OltPonPort(Base):
+    __tablename__ = 'olt_pon_ports'
+    olt_id = Column(ForeignKey('olts.id'), primary_key=True)
+    board = Column(String(10), primary_key=True)
+    port = Column(String(10), primary_key=True)
+    pon_type = Column(String(20), nullable=False, default='')
+    admin_status = Column(String(30), nullable=False, default='')
+    status = Column(String(30), nullable=False, default='')
+    description = Column(String(300), nullable=False, default='')
+    tx_power = Column(Float)
+    onus = Column(Integer, nullable=False, default=0)
+    online = Column(Integer, nullable=False, default=0)
+    average_signal = Column(Float)
+    last_seen = Column(BigInteger, nullable=False)
+
+
+class OltUplink(Base):
+    __tablename__ = 'olt_uplinks'
+    olt_id = Column(ForeignKey('olts.id'), primary_key=True)
+    name = Column(String(80), primary_key=True)
+    description = Column(String(300), nullable=False, default='')
+    kind = Column(String(30), nullable=False, default='')
+    admin_status = Column(String(30), nullable=False, default='')
+    status = Column(String(40), nullable=False, default='')
+    negotiation = Column(String(60), nullable=False, default='')
+    temperature = Column(Float)
+    last_seen = Column(BigInteger, nullable=False)
+
+
+class Onu(Base):
+    """Technical data of one ONU; no address, contact, credentials or management addresses."""
+    __tablename__ = 'onus'
+    id = Column(String(120), primary_key=True)  # SmartOLT's unique external ID
+    sn = Column(String(64), nullable=False, default='')
+    olt_id = Column(String(40), nullable=False, index=True)
+    board = Column(String(10), nullable=False, default='')
+    port = Column(String(10), nullable=False, default='')
+    onu = Column(String(10), nullable=False, default='')
+    onu_type = Column(String(120), nullable=False, default='')
+    zone = Column(String(120), nullable=False, default='')
+    odb = Column(String(120), nullable=False, default='')
+    name = Column(String(200), nullable=False, default='')
+    admin_status = Column(String(30), nullable=False, default='')
+    status = Column(String(30), nullable=False, default='')
+    status_changed_at = Column(BigInteger)
+    signal = Column(String(30), nullable=False, default='')
+    signal_1310 = Column(Float)
+    signal_1490 = Column(Float)
+    present = Column(Boolean, nullable=False, default=True)
+    last_seen = Column(BigInteger, nullable=False)
+    __table_args__ = (Index('ix_onus_pon', 'olt_id', 'board', 'port'),)
+
+
+class OltOutage(Base):
+    """A PON outage as SmartOLT groups it for the NOC: cause, subscribers and splitters, from start to end."""
+    __tablename__ = 'olt_outages'
+    id = Column(String(36), primary_key=True, default=uid)
+    olt_id = Column(ForeignKey('olts.id'), nullable=False, index=True)
+    board = Column(String(10), nullable=False)
+    port = Column(String(10), nullable=False)
+    cause = Column(String(20), nullable=False)  # los (fiber), power, offline, stale (down over 7 days)
+    zone = Column(String(120), nullable=False, default='')
+    description = Column(String(300), nullable=False, default='')
+    started_at = Column(BigInteger)
+    subscribers = Column(Integer, nullable=False, default=0)
+    affected = Column(Integer, nullable=False, default=0)
+    odbs = Column(JSON, nullable=False, default=list)
+    active = Column(Boolean, nullable=False, default=True)
+    first_seen = Column(BigInteger, nullable=False)
+    last_seen = Column(BigInteger, nullable=False)
+    ended_at = Column(BigInteger)
+    __table_args__ = (Index('uq_olt_outages_active', 'olt_id', 'board', 'port', 'cause', unique=True, postgresql_where=text('active')),)
+
+
+class SmartoltState(Base):
+    """When each SmartOLT read is due, how each one went, and the API budget the account has left."""
+    __tablename__ = 'smartolt_state'
+    id = Column(String(20), primary_key=True)
+    config_version = Column(Integer)
+    job_id = Column(ForeignKey('jobs.id'))
+    due = Column(JSON, nullable=False, default=dict)  # task -> epoch
+    tasks = Column(JSON, nullable=False, default=dict)  # task -> {last_success_at, last_error, failures}
+    blocked_until = Column(BigInteger)  # a 429 stops every read until then
+    rate_remaining = Column(Integer)
+    rate_limit = Column(Integer)
+    rate_observed_at = Column(BigInteger)

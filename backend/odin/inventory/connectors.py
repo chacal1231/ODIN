@@ -37,6 +37,15 @@ def allowed_address(host, port, networks):
     return min(addresses, key=lambda address: (ipaddress.ip_address(address).version, address))
 
 
+def public_address(host, port):
+    """A public service on the Internet (a model API, SmartOLT): every DNS answer must be a global address."""
+    try:addresses = sorted({x[4][0] for x in socket.getaddrinfo(host, port, type=socket.SOCK_STREAM)})
+    except OSError:raise ConnectorError('dns_or_network_invalid')
+    # An answer pointing inside the network is refused, never followed.
+    if not addresses or any(not ipaddress.ip_address(a).is_global for a in addresses):raise ConnectorError('network_not_allowed')
+    return min(addresses, key=lambda address: (ipaddress.ip_address(address).version, address))
+
+
 class Transport:
     def __init__(self, endpoint, networks, heartbeat=lambda: None):
         self.endpoint = endpoint.rstrip('/')
@@ -248,6 +257,9 @@ class LibreNMS:
 def connector(kind, endpoint, secret, networks, heartbeat=lambda:None, model=None):
     if not secret:
         raise ConnectorError('token_missing')
+    if kind=='smartolt':
+        from ..olts.connector import SmartOLT
+        return SmartOLT(endpoint,secret,heartbeat)
     if kind=='deepseek':
         from ..analyst.llm import ApiLlm
         return ApiLlm(endpoint,secret,model,heartbeat)

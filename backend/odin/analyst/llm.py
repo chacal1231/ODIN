@@ -9,14 +9,12 @@ API (OpenAI-compatible, DeepSeek by default): HTTPS to public addresses only. Th
 travels in the instructions with JSON mode, and the analyst validates every answer and its citations as it
 does for the local model. Token counts are a conservative estimate. What is sent leaves the network.
 """
-import ipaddress
 import json
 import math
-import socket
 import time
 from urllib.parse import urlsplit, urlunsplit
 import httpx
-from ..inventory.connectors import ConnectorError, allowed_address
+from ..inventory.connectors import ConnectorError, allowed_address, public_address
 
 CONNECT_TIMEOUT = 10
 # Prompt progress arrives every ~1k tokens (a few seconds); silence longer than this is a stall.
@@ -146,11 +144,7 @@ class ApiLlm(Llm):
         parsed = urlsplit(self.endpoint)
         if parsed.scheme != 'https' or not parsed.hostname or parsed.username or parsed.password:raise ConnectorError('endpoint_invalid')
         port = parsed.port or 443
-        try:addresses = sorted({x[4][0] for x in socket.getaddrinfo(parsed.hostname, port, type=socket.SOCK_STREAM)})
-        except OSError:raise ConnectorError('dns_or_network_invalid')
-        # A public API only: an answer pointing inside the network is refused, never followed.
-        if not addresses or any(not ipaddress.ip_address(a).is_global for a in addresses):raise ConnectorError('network_not_allowed')
-        ip = min(addresses, key=lambda a: (ipaddress.ip_address(a).version, a))
+        ip = public_address(parsed.hostname, port)
         netloc = (f'[{ip}]' if ':' in ip else ip) + f':{port}'
         host = parsed.hostname + (f':{parsed.port}' if parsed.port else '')
         return urlunsplit(('https', netloc, parsed.path + path, '', '')), {'Host': host, 'Authorization': 'Bearer ' + self.secret}, parsed.hostname
