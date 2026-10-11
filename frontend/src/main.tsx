@@ -11,6 +11,7 @@ import { OperationsOverview, StatusBar, useMonitoring } from "./monitoring";
 import { Inventory, IntegrationManager, statusNames } from "./inventory";
 import { Olts } from "./olts";
 import { Inbox } from "./inbox";
+import { Setup } from "./setup";
 
 type User = {
   id: string;
@@ -75,11 +76,11 @@ const sections: [string, string[]][] = [
   ["Operación", ["Casos", "Incidentes", "Chat"]],
   ["Monitoreo", ["Red propia", "OLTs", "Servicios externos"]],
   ["Fuentes", ["Eventos"]],
-  ["Configuración", ["Mapa e inventario", "Administración"]],
+  ["Configuración", ["Puesta en marcha", "Mapa e inventario", "Administración"]],
 ];
 const sectionIcons: Record<string, string> = {
   Inicio: "◈", Casos: "⚑", Incidentes: "◷", Chat: "✉", "Red propia": "◎", OLTs: "⊚", "Servicios externos": "◌",
-  Eventos: "◇", "Mapa e inventario": "▦", Administración: "⚙",
+  Eventos: "◇", "Puesta en marcha": "☑", "Mapa e inventario": "▦", Administración: "⚙",
 };
 const names: Record<string, string> = {
   zabbix: "Zabbix",
@@ -109,7 +110,8 @@ function App() {
   const [oltFocus, setOltFocus] = useState("");
   const [inbox, setInbox] = useState<any>(null),
     [homeTab, setHomeTab] = useState<"bandeja" | "panorama">("bandeja"),
-    [menu, setMenu] = useState(false);
+    [menu, setMenu] = useState(false),
+    [setup, setSetup] = useState<any>(null);
   const [incidentFocus, setIncidentFocus] = useState("");
   const [caseFocus, setCaseFocus] = useState("");
   const [chatCase, setChatCase] = useState<ChatCase | null>(null);
@@ -188,6 +190,11 @@ function App() {
     const timer=setInterval(()=>void refresh(),15000);
     return ()=>clearInterval(timer);
   }, [user]);
+  // Administrators see how far the setup is until the required steps are done.
+  useEffect(() => {
+    if (user?.role !== "admin") return setSetup(null);
+    api("/setup").then(setSetup).catch(() => {});
+  }, [user, page]);
   // The inbox feeds the home page and the pending counts of the menu.
   useEffect(() => {
     if (!user) return;
@@ -344,7 +351,7 @@ function App() {
             <div className="nav-group" key={label || "inicio"} role="group" aria-label={label || undefined}>
               {label && <small aria-hidden="true">{label}</small>}
               {items
-                .filter((x) => x !== "Administración" || user.role === "admin")
+                .filter((x) => !["Administración", "Puesta en marcha"].includes(x) || user.role === "admin")
                 .map((x) => (
                   <button
                     key={x}
@@ -440,6 +447,12 @@ function App() {
                   ))}
                 </div>
               </div>
+              {homeTab === "bandeja" && setup && !setup.required_done && (
+                <p className="notice setup-banner">
+                  <span>Puesta en marcha: <b>{setup.done} de {setup.total}</b> pasos. Conecta las fuentes para que ODIN tenga qué vigilar.</span>
+                  <button onClick={() => go("Puesta en marcha")}>Continuar</button>
+                </p>
+              )}
               {homeTab === "bandeja" ? <Inbox data={inbox} zone={zone} onNavigate={go} /> : <>
               <div className="title-row">
                 <small className="muted">Monitoreo, incidentes y fuentes</small>
@@ -507,6 +520,8 @@ function App() {
               admin={user.role === "admin"}
               onError={setError}
             />
+          ) : page === "Puesta en marcha" ? (
+            <Setup api={api} onError={setError} onNavigate={go} />
           ) : page === "OLTs" ? (
             <Olts key={oltFocus || "all"} focusId={oltFocus || undefined} api={api} zone={zone} admin={user.role === "admin"} onError={setError} />
           ) : page === "Red propia" || page === "Servicios externos" ? (

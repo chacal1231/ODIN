@@ -129,6 +129,47 @@ def trace_view(row,hops=False):
     return view
 
 
+def save_target(db,body,user,row=None):
+    lock(db)
+    if row and (row.archived or row.version!=body.version):raise HTTPException(409,'El destino cambió. Actualiza la página.')
+    if row and 'destination_id' in body.model_fields_set and body.destination_id!=row.destination_id:
+        raise HTTPException(422,'No se puede mover una comprobación con historial a otro destino')
+    if body.destination_id and not db.get(MonitoringDestination,body.destination_id):
+        raise HTTPException(422,'Destino lógico no encontrado')
+    profile=db.get(ProbeProfileVersion,body.profile_version_id)
+    if not profile:raise HTTPException(422,'Perfil no encontrado')
+    if body.pop_id:
+        pop=db.get(Pop,body.pop_id)
+        if not pop or pop.archived:raise HTTPException(422,'POP no disponible')
+    try:
+        config=effective(profile.config,body.overrides)
+        protocol=body.protocol if not row or 'protocol' in body.model_fields_set else row.protocol
+        check=body.check_config.model_dump() if not row or 'check_config' in body.model_fields_set else row.check_config
+        measurement_config(config,protocol,check)
+        if row and row.protocol!=protocol and db.scalar(select(ProbeIncident.id).where(ProbeIncident.target_id==row.id,ProbeIncident.closed_at.is_(None)).limit(1)):
+            raise HTTPException(409,'Hay incidentes activos. Crea otro destino para un protocolo distinto.')
+    except ValueError as exc:raise HTTPException(422,str(exc))
+    if not row and db.scalar(select(func.count()).select_from(ProbeTarget).where(ProbeTarget.archived.is_(False)))>=200:
+        raise HTTPException(422,'Límite de 200 destinos registrados')
+    is_new=row is None
+    if is_new:row=ProbeTarget(id=uid(),effective=config);db.add(row)
+    old=None if is_new else (row.address,row.family,row.approved_ips,row.effective,row.enabled,row.protocol,row.check_config,row.dns_policy)
+    for key,value in body.model_dump(exclude={'version'}).items():
+        if not is_new and key in ('categories','service','protocol','check_config','dns_policy','destination_id','essential') and key not in body.model_fields_set:continue
+        setattr(row,key,value)
+    row.effective=config
+    if is_new:row.version=1;row.epoch=1;row.next_due=next_slot(row,now())
+    else:
+        row.version+=1
+        if old!=(row.address,row.family,row.approved_ips,row.effective,row.enabled,row.protocol,row.check_config,row.dns_policy):changed(db,row)
+    try:
+        ensure_destination(db,row)
+        db.flush();capacity(db);audit(db,'probe_target_saved',user.id,row.id);db.commit()
+    except IntegrityError:db.rollback();raise HTTPException(409,'Ya existe un destino con ese nombre')
+    except ValueError as exc:db.rollback();raise HTTPException(422,str(exc))
+    return target_views(db,[row])[0]
+
+
 def router(current,admin):
     api=APIRouter(prefix='/api/v1')
 
@@ -214,46 +255,6 @@ def router(current,admin):
     @api.get('/targets')
     def targets(user=Depends(current),db:Session=Depends(get_db)):
         return target_views(db,list(db.scalars(select(ProbeTarget).where(ProbeTarget.archived.is_(False)).order_by(ProbeTarget.name).limit(200))))
-
-    def save_target(db,body,user,row=None):
-        lock(db)
-        if row and (row.archived or row.version!=body.version):raise HTTPException(409,'El destino cambió. Actualiza la página.')
-        if row and 'destination_id' in body.model_fields_set and body.destination_id!=row.destination_id:
-            raise HTTPException(422,'No se puede mover una comprobación con historial a otro destino')
-        if body.destination_id and not db.get(MonitoringDestination,body.destination_id):
-            raise HTTPException(422,'Destino lógico no encontrado')
-        profile=db.get(ProbeProfileVersion,body.profile_version_id)
-        if not profile:raise HTTPException(422,'Perfil no encontrado')
-        if body.pop_id:
-            pop=db.get(Pop,body.pop_id)
-            if not pop or pop.archived:raise HTTPException(422,'POP no disponible')
-        try:
-            config=effective(profile.config,body.overrides)
-            protocol=body.protocol if not row or 'protocol' in body.model_fields_set else row.protocol
-            check=body.check_config.model_dump() if not row or 'check_config' in body.model_fields_set else row.check_config
-            measurement_config(config,protocol,check)
-            if row and row.protocol!=protocol and db.scalar(select(ProbeIncident.id).where(ProbeIncident.target_id==row.id,ProbeIncident.closed_at.is_(None)).limit(1)):
-                raise HTTPException(409,'Hay incidentes activos. Crea otro destino para un protocolo distinto.')
-        except ValueError as exc:raise HTTPException(422,str(exc))
-        if not row and db.scalar(select(func.count()).select_from(ProbeTarget).where(ProbeTarget.archived.is_(False)))>=200:
-            raise HTTPException(422,'Límite de 200 destinos registrados')
-        is_new=row is None
-        if is_new:row=ProbeTarget(id=uid(),effective=config);db.add(row)
-        old=None if is_new else (row.address,row.family,row.approved_ips,row.effective,row.enabled,row.protocol,row.check_config,row.dns_policy)
-        for key,value in body.model_dump(exclude={'version'}).items():
-            if not is_new and key in ('categories','service','protocol','check_config','dns_policy','destination_id','essential') and key not in body.model_fields_set:continue
-            setattr(row,key,value)
-        row.effective=config
-        if is_new:row.version=1;row.epoch=1;row.next_due=next_slot(row,now())
-        else:
-            row.version+=1
-            if old!=(row.address,row.family,row.approved_ips,row.effective,row.enabled,row.protocol,row.check_config,row.dns_policy):changed(db,row)
-        try:
-            ensure_destination(db,row)
-            db.flush();capacity(db);audit(db,'probe_target_saved',user.id,row.id);db.commit()
-        except IntegrityError:db.rollback();raise HTTPException(409,'Ya existe un destino con ese nombre')
-        except ValueError as exc:db.rollback();raise HTTPException(422,str(exc))
-        return target_views(db,[row])[0]
 
     @api.post('/targets',status_code=201)
     def create_target(body:TargetBody,user=Depends(admin),db:Session=Depends(get_db)):

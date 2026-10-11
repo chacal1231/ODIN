@@ -404,3 +404,6 @@ app.include_router(olts_router(current, admin))
 
 from .inbox import router as inbox_router
 app.include_router(inbox_router(current))
+
+from .setup import router as setup_router
+app.include_router(setup_router(current, admin))

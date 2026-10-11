@@ -154,9 +154,24 @@ def test_zabbix_batches_and_redacts_payload(monkeypatch):
                           'inventory':{'serialno_a':'SERIAL','location':'Norte','password':'SECRET'},'tags':[]}]}
     monkeypatch.setattr(Transport,'request',request)
     result=Zabbix('https://zabbix.test','TOKEN',['10.0.0.0/8']).fetch()
-    assert len(calls)==3 and calls[1]['params']['hostids']==['1']
+    # The version is asked once, without the token; an unreadable one keeps the token in the body.
+    assert calls[0]['method']=='apiinfo.version' and 'auth' not in calls[0] and calls[1]['auth']=='TOKEN'
+    assert len(calls)==4 and calls[2]['params']['hostids']==['1']
     assert result[0]['interfaces'][0]['kind']=='management'
     assert 'SECRET' not in str(result) and 'TOKEN' not in str(result)
+
+
+@pytest.mark.parametrize('version,bearer',[('7.2.1',True),('6.4.0',True),('6.0.30',False),('5.4.12',False)])
+def test_zabbix_token_where_each_version_expects_it(monkeypatch,version,bearer):
+    calls=[]
+    def request(self,method,url,headers=None,payload=None):
+        calls.append((headers,payload))
+        return {'result':version if payload['method']=='apiinfo.version' else [{'hostid':'1'}]}
+    monkeypatch.setattr(Transport,'request',request)
+    Zabbix('https://zabbix.test','TOKEN',['10.0.0.0/8']).rpc('host.get',{})
+    (first_headers,first),(headers,body)=calls
+    assert first_headers is None and 'auth' not in first
+    assert (headers=={'Authorization':'Bearer TOKEN'})==bearer and ('auth' in body)==(not bearer)
 
 
 def test_librenms_full_snapshot_and_ports(monkeypatch):

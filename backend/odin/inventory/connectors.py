@@ -121,6 +121,12 @@ def address_list(values):
     return sorted(set(result))
 
 
+def bearer_supported(version):
+    try:major,minor=(int(x) for x in str(version).split('.')[:2])
+    except ValueError:return False
+    return (major,minor)>=(6,4)
+
+
 class Zabbix:
     def __init__(self, endpoint, secret, networks, heartbeat=lambda:None):
         self.http=Transport(endpoint, networks, heartbeat)
@@ -128,12 +134,18 @@ class Zabbix:
         if not self.url.endswith('/api_jsonrpc.php'):
             self.url+='/api_jsonrpc.php'
         self.secret=secret
+        self.bearer=None
 
     def rpc(self, method, params, auth=True):
         body={'jsonrpc':'2.0','method':method,'params':params,'id':1}
+        headers=None
         if auth:
-            body['auth']=self.secret
-        data=self.http.request('POST',self.url,payload=body)
+            # Zabbix 6.4+ takes the token as a Bearer header; 7.2 removed the "auth" field that older versions need.
+            if self.bearer is None:
+                self.bearer=bearer_supported(self.rpc('apiinfo.version',{},False))
+            if self.bearer:headers={'Authorization':'Bearer '+self.secret}
+            else:body['auth']=self.secret
+        data=self.http.request('POST',self.url,headers=headers,payload=body)
         if 'error' in data:
             raise ConnectorError('rpc_access_or_parameters')
         if 'result' not in data:

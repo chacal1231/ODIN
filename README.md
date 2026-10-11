@@ -1,6 +1,6 @@
 # ODIN · Edición ISP
 
-Consola de NOC para ISPs, instalada una por operador. Integra **Zabbix** y **LibreNMS** (inventario y eventos), **Graylog** (logs), sondeos ICMP/TCP propios hacia la red y hacia servicios externos, un mapa de POPs y equipos, casos correlacionados y un analista LLM que explica cada caso y responde preguntas sobre la red citando los datos.
+Consola de NOC para ISPs, instalada una por operador, pensada para atender el **Nivel 1** de la operación. Integra **LibreNMS** y **Zabbix** (inventario y eventos), **Graylog** (logs de los routers), **SmartOLT** (OLTs y caídas de PON), sondeos ICMP/TCP y trazas propias hacia la red y hacia servicios externos. Con eso arma casos correlacionados, que un analista LLM (local o DeepSeek) explica citando los datos, y avisa por **Telegram** al NOC y al grupo de proveedores. La pantalla de inicio es la **bandeja de ODIN**: lo que necesita a una persona, lo que está en curso y lo resuelto en el turno.
 
 ## Inicio local
 
@@ -13,6 +13,17 @@ docker compose exec api python -m odin.cli create-admin nocadmin
 ```
 
 Abrir **http://localhost:8080**. La CLI solicita una contraseña temporal sin mostrarla; el primer ingreso exige contraseña nueva de al menos 14 caracteres y registro de MFA en un autenticador TOTP: escanear el código QR o introducir la clave mostrada. Guardar los ocho códigos de recuperación antes de cerrar el aviso. No existen usuarios ni contraseñas predeterminadas.
+
+### Puesta en marcha
+
+Con el administrador creado, abrir **Configuración → Puesta en marcha**. El asistente guía, en orden:
+1. conectar LibreNMS;
+2. revisar los **proveedores que ODIN detecta en las descripciones de los puertos**;
+3. sumar Zabbix, Graylog y SmartOLT;
+4. crear los **destinos de monitoreo sugeridos**: la gestión de cada equipo y el otro extremo de cada enlace con proveedores;
+5. configurar Telegram y el modelo.
+
+Cada paso prueba la conexión y muestra lo que encontró. Detalles, permisos de solo lectura recomendados y la convención de descripciones en [Puesta en marcha](docs/puesta-en-marcha.md).
 
 El puerto web solo escucha en loopback. Para acceso desde otra máquina, usar un túnel SSH que conserve `localhost:8080` como origen. Esta configuración es de desarrollo. Para publicar con HTTPS, usar `compose.public.yaml` y `deploy/Caddyfile.public` cambiando `odin.example.com` por el dominio propio; no publicar el Compose de desarrollo tal cual ni desactivar Secure para un dominio público.
 
@@ -28,7 +39,7 @@ El navegador avisa del certificado la primera vez; el certificado se conserva en
 
 ## Administración
 
-El administrador puede crear usuarios (contraseña temporal mostrada una vez), revocar sesiones, desactivar usuarios y guardar configuración cifrada de fuentes. Cada fuente se prueba desde Administración después de configurar sus redes permitidas; hasta entonces aparece como **sin validar**. Zabbix y LibreNMS importan inventario y eventos; Graylog y el analista LLM tienen sus lectores y controles en Eventos y Casos. El operador puede consultar el panel pero no administrar usuarios ni integraciones.
+El administrador puede crear usuarios (contraseña temporal mostrada una vez), revocar sesiones, desactivar usuarios y guardar configuración cifrada de fuentes, desde el asistente de puesta en marcha o desde Administración. Cada fuente se prueba después de configurar sus redes permitidas; hasta entonces aparece como **sin validar**. Zabbix y LibreNMS importan inventario y eventos; Graylog y el analista LLM tienen sus lectores y controles en Eventos y Casos. El operador puede consultar el panel pero no administrar usuarios ni integraciones.
 
 ### Modelo del analista
 
@@ -81,6 +92,7 @@ La cola admite idempotencia, lease con heartbeat, recuperación tras expiración
 
 ## Documentos
 
+- [Puesta en marcha](docs/puesta-en-marcha.md): el asistente paso a paso, credenciales de solo lectura y convención de descripciones de puertos.
 - [Organización del monitoreo](docs/organizacion-monitoreo.md)
 - [Catálogo de hyperscalers](docs/catalogo-hyperscalers.md)
 - [Vigilancia de ODIN](docs/vigilancia-odin.md): el sondeador, los lectores de eventos y la cola se vigilan a sí mismos y los avisos aparecen en la barra de estado.
