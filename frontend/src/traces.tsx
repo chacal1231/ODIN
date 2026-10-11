@@ -66,7 +66,7 @@ function PathSummary({ trace }: { trace: any }) {
       {trace.hop_count} saltos
       {p.handoff && <> · sale por {handoff(p.handoff)}</>}
       {!p.handoff && p.last_own && <> · último equipo propio {p.last_own.device_name}</>}
-      {p.asns?.length > 0 && <> · AS {p.asns.join(" → ")}</>}
+      {p.asns?.length > 0 && <> · <span className="mono">AS {p.asns.join(" → ")}</span></>}
     </small>
   );
 }
@@ -87,7 +87,7 @@ function Hops({ hops }: { hops: any[] }) {
           {hops.map((h) => (
             <tr key={h.hop} className={"trace-" + h.segment}>
               <td>{h.hop}</td>
-              <td>
+              <td className="mono">
                 {h.address || "—"}
                 {h.asn && <small>AS{h.asn}</small>}
               </td>
@@ -204,7 +204,7 @@ export function Traces({
                       <td>
                         {when(t.finished_at || t.slot, zone)}
                         <small>
-                          {t.address} · {t.protocol === "tcp" ? `TCP ${t.port}` : "ICMP"}
+                          <span className="mono">{t.address}</span> · {t.protocol === "tcp" ? `TCP ${t.port}` : "ICMP"}
                         </small>
                       </td>
                       <td>{reasons[t.reason] || t.reason}</td>

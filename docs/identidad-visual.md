@@ -9,9 +9,22 @@ Aplicada el 25 de septiembre de 2026 a partir de la referencia proporcionada por
 - Azul pálido: #E5F1FC.
 - Dorado: #F5A623.
 
-Uso (6 de octubre de 2026): el dorado queda reservado al logo. Las acciones usan azul (`--primary`: #1F5C96 en claro, #3F7FBF en oscuro) y los títulos que abren detalle se muestran como texto con subrayado al pasar el puntero, no como botones. El ámbar (`--warn`, `--notice-bg`) solo indica advertencia o aviso, nunca decoración.
+Uso (6 de octubre de 2026, vigente con el tono de consola): el dorado queda reservado al logo. Las acciones usan azul (`--primary`: #1F5C96 en claro, #3F7FBF en oscuro) y los títulos que abren detalle se muestran como texto con subrayado al pasar el puntero, no como botones. El ámbar (`--warn`, `--notice-bg`) solo indica advertencia o aviso, nunca decoración.
 
 Los colores funcionales de texto, superficie, borde y estado se definen mediante variables en frontend/src/style.css. El tema oscuro utiliza fondos marinos y textos claros; el claro utiliza superficies blancas/azul pálido y texto marino. No se invierte el símbolo mediante filtros.
+
+## Tono de consola NOC (11 de octubre de 2026)
+
+ODIN es una consola de operación, no un sitio de marca. Reglas:
+
+- **Superficies neutras**: gris claro en el tema claro y grafito en el oscuro (`--bg`, `--surface`, `--border`). El azul marino, el celeste y el dorado de la marca quedan solo para el logo.
+- **El color es solo para el estado**: `--ok` normal, `--warn` y `--notice-*` advertencia, `--crit` y `--error-*` crítico, y `--nodata`, un violeta apagado, para *sin datos*, que no es lo mismo que normal ni que pausado. Ningún elemento decorativo usa esos colores.
+- **Densidad de consola**: texto base de 14 px, tablas con 7 px de relleno vertical y paneles de 16–18 px.
+- **Datos de red en monoespaciada** (`--mono`, clase `.mono` o `<code>`): IPs, ASN, interfaces y códigos. Las celdas usan cifras de ancho fijo.
+- **Cabecera**: hora UTC junto a la zona elegida (proveedores, logs y tickets hablan en UTC) y el nombre del ISP (`ODIN_ISP_NAME`) bajo ODIN.
+- **Tema por defecto: Sistema**. Cada operador elige Claro u Oscuro.
+
+Contraste comprobado (WCAG AA, al menos 4.5:1) para texto, texto secundario, insignias de estado y botones en ambos temas.
 
 ## Logo
 

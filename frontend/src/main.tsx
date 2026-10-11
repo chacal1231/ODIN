@@ -2,7 +2,7 @@ import React, { useState, useEffect, FormEvent } from "react";
 import { createRoot } from "react-dom/client";
 import qrcode from "qrcode-generator";
 import "./style.css";
-import { Brand, ThemePicker, useTheme } from "./branding";
+import { Brand, Clock, ThemePicker, useTheme } from "./branding";
 import { Destinations, Incidents } from "./probes";
 import { SourceEvents } from "./events";
 import { Cases } from "./cases";
@@ -85,6 +85,7 @@ const names: Record<string, string> = {
   graylog: "Graylog",
   llama_server: "Modelo local (llama.cpp)",
   deepseek: "DeepSeek (API)",
+  telegram: "Telegram",
 };
 
 function App() {
@@ -104,6 +105,15 @@ function App() {
   const [incidentFocus, setIncidentFocus] = useState("");
   const [caseFocus, setCaseFocus] = useState("");
   const [chatCase, setChatCase] = useState<ChatCase | null>(null);
+  const [isp, setIsp] = useState("");
+  useEffect(() => {
+    api("/branding")
+      .then((x) => {
+        setIsp(x.isp_name || "");
+        if (x.isp_name) document.title = "ODIN · " + x.isp_name;
+      })
+      .catch(() => {});
+  }, []);
   const monitor = useMonitoring(api, !!user);
   function go(next: string) {
     setMonitorFocus({});
@@ -195,7 +205,7 @@ function App() {
           <div className="login-appearance">
             <ThemePicker theme={theme} onChange={setTheme} />
           </div>
-          <Brand />
+          <Brand isp={isp} />
           <h2>{challenge ? "Verifica tu identidad" : "Iniciar sesión"}</h2>
           {challenge && (
             <p className="muted">
@@ -296,7 +306,7 @@ function App() {
   return (
     <div className="app">
       <aside>
-        <Brand />
+        <Brand isp={isp} />
         <nav>
           {sections.map(([label, items]) => (
             <div className="nav-group" key={label || "inicio"} role="group" aria-label={label || undefined}>
@@ -321,9 +331,10 @@ function App() {
       <div className="workspace">
         <header>
           <span>
-            Infraestructura / {group && group + " / "}<strong>{page}</strong>
+            {group && group + " / "}<strong>{page}</strong>
           </span>
           <div className="header-actions">
+            <Clock zone={zone} />
             <ThemePicker theme={theme} onChange={setTheme} />
             <select
               aria-label="Zona horaria"

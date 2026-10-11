@@ -138,6 +138,12 @@ def live():
     return {'status': 'alive'}
 
 
+@app.get('/api/v1/branding')
+def branding():
+    # Public: the login screen shows whose NOC this is.
+    return {'isp_name': settings().isp_name}
+
+
 @app.get('/api/v1/health/ready')
 def ready(db: Session = Depends(get_db)):
     try:

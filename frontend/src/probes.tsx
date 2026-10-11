@@ -527,7 +527,7 @@ export function Destinations({
                         {t.name}
                       </button>
                       <small>
-                        {(t.protocol || "icmp").toUpperCase()} · {t.address} ·{" "}
+                        {(t.protocol || "icmp").toUpperCase()} · <span className="mono">{t.address}</span> ·{" "}
                         {pops.find((p) => p.id === t.pop_id)?.name || "Sin POP"}
                       </small>
                     </td>
@@ -1348,7 +1348,7 @@ function TargetDetail({
       <div className="title-row">
         <div>
           <h2>{target?.name || "Historial del destino"}</h2>
-          <small>Medición desde ODIN · {target?.address}</small>
+          <small>Medición desde ODIN · <span className="mono">{target?.address}</span></small>
         </div>
         <button className="quiet" onClick={onClose}>
           Cerrar
@@ -1496,7 +1496,7 @@ function TargetDetail({
                     )}
                     {r.result?.rounds?.map((x: any) => (
                       <small key={x.address}>
-                        {x.address} · {x.received}/{x.sent} respuestas ·{" "}
+                        <span className="mono">{x.address}</span> · {x.received}/{x.sent} respuestas ·{" "}
                         {(r.result?.protocol || "icmp") === "icmp"
                           ? "pérdida"
                           : "fallos"}{" "}
@@ -1690,7 +1690,7 @@ export function Incidents({
                     }}
                   >
                     <span>
-                      {i.target_name} · {i.address}
+                      {i.target_name} · <span className="mono">{i.address}</span>
                     </span>
                     <small>
                       {Object.keys(i.conditions)
@@ -1732,7 +1732,7 @@ export function Incidents({
                     >
                       {i.target_name}
                     </button>
-                    <small>{i.address}</small>
+                    <small className="mono">{i.address}</small>
                   </td>
                   <td>
                     {Object.keys(i.conditions)
@@ -1771,7 +1771,7 @@ export function Incidents({
         <section className="panel probe-panel">
           <div className="title-row">
             <h2>
-              {detail.target_name} · {detail.address}
+              {detail.target_name} · <span className="mono">{detail.address}</span>
             </h2>
             <button
               className="quiet"

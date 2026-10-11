@@ -15,7 +15,7 @@ export function useTheme() {
       document.documentElement.dataset.themePreference = theme;
       document
         .querySelector('meta[name="theme-color"]')
-        ?.setAttribute("content", effective === "dark" ? "#081B2D" : "#F3F7FC");
+        ?.setAttribute("content", effective === "dark" ? "#0F1216" : "#F4F5F7");
     };
     apply();
     try {
@@ -62,12 +62,13 @@ export function ThemePicker({
     </label>
   );
 }
-export function Brand({ full = false }: { full?: boolean }) {
+export function Brand({ full = false, isp = "" }: { full?: boolean; isp?: string }) {
   return (
     <div className={full ? "odin-brand full" : "odin-brand compact"}>
       <img src="/odin-eye.svg" alt="Ojo de ODIN con dos cuervos" />
       <div className="brand-wordmark">
         <span className="brand-name">ODIN</span>
+        {isp && !full && <span className="brand-isp">NOC · {isp}</span>}
       </div>
       {full && (
         <>
@@ -80,5 +81,30 @@ export function Brand({ full = false }: { full?: boolean }) {
         </>
       )}
     </div>
+  );
+}
+
+/** UTC beside the chosen zone: carriers, logs and tickets speak UTC. */
+export function Clock({ zone }: { zone: string }) {
+  const [stamp, setStamp] = useState(() => new Date());
+  useEffect(() => {
+    const timer = setInterval(() => setStamp(new Date()), 15000);
+    return () => clearInterval(timer);
+  }, []);
+  const at = (timeZone: string) =>
+    new Intl.DateTimeFormat("es", { hour: "2-digit", minute: "2-digit", hourCycle: "h23", timeZone }).format(stamp);
+  const place = zone.split("/").pop()?.replace(/_/g, " ") || zone;
+  return (
+    <span className="clock" aria-label="Hora actual">
+      {at("UTC")}
+      <small>UTC</small>
+      {zone !== "UTC" && (
+        <>
+          {" · "}
+          {at(zone)}
+          <small>{place}</small>
+        </>
+      )}
+    </span>
   );
 }

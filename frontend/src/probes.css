@@ -47,12 +47,12 @@
 }
 .probe-table th,
 .probe-table td {
-  padding: 14px 10px;
+  padding: 7px 10px;
   border-bottom: 1px solid var(--border);
   vertical-align: top;
 }
 .probe-table td:first-child {
-  min-width: 180px;
+  min-width: 160px;
 }
 .probe-table small,
 .probe-profile small {
@@ -84,16 +84,21 @@
   background: var(--ok-bg);
   color: var(--ok);
 }
+.probe-status.no_data {
+  background: var(--nodata-bg);
+  color: var(--nodata);
+  border-color: var(--nodata);
+}
 .probe-profile {
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 16px;
-  padding: 14px 0;
+  padding: 9px 0;
   border-bottom: 1px solid var(--border);
 }
 .probe-chart {
-  margin: 24px 0;
+  margin: 16px 0;
   max-width: 100%;
 }
 .probe-chart figcaption {
@@ -170,10 +175,10 @@
   stroke-dasharray: 5 4;
 }
 .chart-warning {
-  stroke: #c98417;
+  stroke: var(--warn);
 }
 .chart-critical {
-  stroke: #d84545;
+  stroke: var(--crit);
 }
 .chart-maintenance {
   fill: var(--muted);
@@ -597,7 +602,7 @@
   box-shadow: inset 3px 0 var(--warn);
 }
 .noc-table tr.sev-no_data td:first-child {
-  box-shadow: inset 3px 0 var(--muted);
+  box-shadow: inset 3px 0 var(--nodata);
 }
 .noc-table small {
   display: block;

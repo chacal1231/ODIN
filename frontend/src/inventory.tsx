@@ -308,7 +308,7 @@ function DeviceSelect({ api, name, label, endpoint = "/devices", disabled = fals
           className={active === index ? "active" : ""} onMouseDown={event => event.preventDefault()}
           onClick={() => choose(device)}>
           <strong>{device.name}</strong>
-          {device.sources[0]?.addresses[0] && <small>{device.sources[0].addresses[0]}</small>}
+          {device.sources[0]?.addresses[0] && <small className="mono">{device.sources[0].addresses[0]}</small>}
           {device.port_count !== undefined && <small>{[...new Set(device.sources.map(source => sourceNames[source.source] || source.source))].join(" / ")} · {device.port_count} puertos</small>}
         </button>)}
       </div>
@@ -381,7 +381,7 @@ function IdentityComparison({ device }: { device: any }) {
     <small>{device.pop_name || "Sin POP"} · {device.port_count ?? 0} puertos importados</small>
     {(device.sources || []).map((source: any) => <p key={source.source + source.external_id}>
       <b>{sourceNames[source.source] || source.source}</b> · {source.name}<br />
-      <small>{source.addresses.join(", ") || "Sin IP"} · ID {source.external_id}</small>
+      <small><span className="mono">{source.addresses.join(", ") || "Sin IP"}</span> · ID {source.external_id}</small>
     </p>)}
   </div>;
 }
@@ -889,7 +889,7 @@ export function Inventory({
                             <strong>{sourceNames[s.source]}</strong>{" "}
                             <small>#{s.external_id}</small>
                             <br />
-                            <small>{s.addresses.join(", ") || "—"}</small>
+                            <small className="mono">{s.addresses.join(", ") || "—"}</small>
                           </div>
                         ))}
                       </td>
@@ -1160,7 +1160,7 @@ export function Inventory({
                   {sourceNames[s.source]} · #{s.external_id}
                 </strong>
                 <span>{s.name}</span>
-                <small>{s.addresses.join(", ")}</small>
+                <small className="mono">{s.addresses.join(", ")}</small>
                 <small>Ubicación: {String(s.details.location || "—")}</small>
                 <small>Modelo: {String(s.details.model || "—")}</small>
                 <small>Serie: {String(s.details.serial || "—")}</small>

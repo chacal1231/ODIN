@@ -162,3 +162,14 @@ def test_local_reset_revokes_and_requires_new_enrollment(client, administrator, 
     assert client.get('/api/v1/me').status_code==401
     login=client.post('/api/v1/auth/login',json={'username':'admin','password':PASSWORD}).json()
     assert login['enrollment_required'] and login['password_change_required']
+
+
+def test_branding_is_public_and_isp_name_is_bounded(client, monkeypatch):
+    import pytest
+    from odin.config import Settings
+    assert client.get('/api/v1/branding').json() == {'isp_name': ''}
+    monkeypatch.setenv('ODIN_ISP_NAME', 'Red Andina')
+    assert Settings().isp_name == 'Red Andina'
+    for bad in ('x' * 61, 'ISP\nfalso'):
+        monkeypatch.setenv('ODIN_ISP_NAME', bad)
+        with pytest.raises(ValueError):Settings()

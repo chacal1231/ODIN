@@ -508,7 +508,7 @@ function AttentionQueue({
                 </button>
                 <small>
                   {r.check !== r.name ? r.check + " · " : ""}
-                  {r.address}
+                  <span className="mono">{r.address}</span>
                   {r.essential ? "" : " · opcional"}
                 </small>
               </td>
@@ -1322,7 +1322,7 @@ export function OperationsOverview({
                     <td>{events[e.kind] || "Actualización de incidente"}</td>
                     <td>
                       {e.target_name}
-                      <small>{e.address}</small>
+                      <small className="mono">{e.address}</small>
                     </td>
                   </tr>
                 ))}

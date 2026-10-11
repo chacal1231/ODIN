@@ -178,7 +178,7 @@ function LogSenders({ api, admin, date }: { api: Api; admin: boolean; date: (sta
     <Paged items={rows}>{(page) => <div className="probe-table"><table>
       <thead><tr><th>Origen</th><th>IP de envío</th><th>Logs</th><th>Último log</th><th>Equipo del inventario</th></tr></thead>
       <tbody>{page.map((r) => <tr key={r.name}>
-        <td>{r.name}</td><td>{r.address}</td><td>{r.messages}</td><td>{date(r.last_seen)}</td>
+        <td>{r.name}</td><td className="mono">{r.address}</td><td>{r.messages}</td><td>{date(r.last_seen)}</td>
         <td><AssociationPicker api={api} admin={admin} row={r} busy={busy} onAssign={(id) => void assign(r.name, id)} /></td>
       </tr>)}</tbody>
     </table></div>}</Paged>
