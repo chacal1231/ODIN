@@ -12,9 +12,19 @@ docker compose up --build -d
 docker compose exec api python -m odin.cli create-admin nocadmin
 ```
 
-Abrir **http://localhost:8080**. La CLI solicita una contraseña temporal sin mostrarla; el primer ingreso exige contraseña nueva de al menos 14 caracteres y registro de MFA en un autenticador TOTP. Introducir manualmente la clave mostrada. Guardar los ocho códigos de recuperación antes de cerrar el aviso. No existen usuarios ni contraseñas predeterminadas.
+Abrir **http://localhost:8080**. La CLI solicita una contraseña temporal sin mostrarla; el primer ingreso exige contraseña nueva de al menos 14 caracteres y registro de MFA en un autenticador TOTP: escanear el código QR o introducir la clave mostrada. Guardar los ocho códigos de recuperación antes de cerrar el aviso. No existen usuarios ni contraseñas predeterminadas.
 
 El puerto web solo escucha en loopback. Para acceso desde otra máquina, usar un túnel SSH que conserve `localhost:8080` como origen. Esta configuración es de desarrollo. Para publicar con HTTPS, usar `compose.public.yaml` y `deploy/Caddyfile.public` cambiando `odin.example.com` por el dominio propio; no publicar el Compose de desarrollo tal cual ni desactivar Secure para un dominio público.
+
+### Publicación WAN sin dominio
+
+Para abrir el panel por la IP pública en un puerto propio, con HTTPS y certificado de la CA interna de Caddy, definir en `.env` `ODIN_WAN_HOST` (IP pública) y `ODIN_WAN_PORT` (8090 por defecto), y opcionalmente `ODIN_WAN_ALLOW` con las redes autorizadas:
+
+```bash
+docker compose -f compose.yaml -f compose.wan.yaml up --build -d
+```
+
+El navegador avisa del certificado la primera vez; el certificado se conserva en el volumen `caddy_wan_data`. Docker publica el puerto por encima de `ufw`: si solo se debe entrar desde el NOC, restringirlo con `ODIN_WAN_ALLOW`. Con dominio propio y puertos 80/443 libres, preferir `compose.public.yaml`.
 
 ## Administración
 

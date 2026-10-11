@@ -1,0 +1,31 @@
+{
+	# Clients that connect by IP send no SNI.
+	default_sni {$ODIN_WAN_HOST}
+	auto_https disable_redirects
+}
+
+https://{$ODIN_WAN_HOST}:{$ODIN_WAN_PORT} {
+	tls internal
+	@outside not remote_ip {$ODIN_WAN_ALLOW}
+	abort @outside
+	header {
+		X-Content-Type-Options nosniff
+		X-Frame-Options DENY
+		Referrer-Policy strict-origin-when-cross-origin
+		Content-Security-Policy "default-src 'self'; script-src 'self'; style-src 'self'; connect-src 'self'; img-src 'self' data: https://tile.openstreetmap.org; frame-ancestors 'none'; form-action 'self'; base-uri 'self'"
+	}
+	request_body {
+		max_size 32KB
+	}
+	handle /api/* {
+		reverse_proxy api:8000 {
+			header_up X-Forwarded-For {remote_host}
+			header_up X-Forwarded-Proto https
+		}
+	}
+	handle {
+		root * /srv
+		try_files {path} /index.html
+		file_server
+	}
+}

@@ -1,5 +1,6 @@
 import React, { useState, useEffect, FormEvent } from "react";
 import { createRoot } from "react-dom/client";
+import qrcode from "qrcode-generator";
 import "./style.css";
 import { Brand, ThemePicker, useTheme } from "./branding";
 import { Destinations, Incidents } from "./probes";
@@ -21,8 +22,31 @@ type Challenge = {
   enrollment_required: boolean;
   password_change_required: boolean;
   mfa_secret?: string;
+  provisioning_uri?: string;
 };
 let csrf = "";
+// Drawn in the browser: the TOTP secret never goes to a QR service.
+function TotpQr({ uri }: { uri: string }) {
+  const qr = qrcode(0, "M");
+  qr.addData(uri);
+  qr.make();
+  const n = qr.getModuleCount();
+  let d = "";
+  for (let r = 0; r < n; r++)
+    for (let c = 0; c < n; c++) if (qr.isDark(r, c)) d += `M${c} ${r}h1v1h-1z`;
+  return (
+    <svg
+      className="totp-qr"
+      viewBox={`-4 -4 ${n + 8} ${n + 8}`}
+      role="img"
+      aria-label="Código QR para el autenticador"
+      shapeRendering="crispEdges"
+    >
+      <rect x={-4} y={-4} width={n + 8} height={n + 8} fill="#fff" />
+      <path d={d} fill="#000" />
+    </svg>
+  );
+}
 async function api(path: string, method = "GET", body?: unknown) {
   const response = await fetch("/api/v1" + path, {
     method,
@@ -212,9 +236,13 @@ function App() {
                   <div className="notice">
                     <strong>Configura tu autenticador</strong>
                     <p>
-                      Añade una cuenta TOTP con esta clave. Solo se muestra
+                      Escanea el código con tu autenticador. Si no puedes,
+                      añade una cuenta TOTP con la clave. Solo se muestra
                       durante el registro.
                     </p>
+                    {challenge.provisioning_uri && (
+                      <TotpQr uri={challenge.provisioning_uri} />
+                    )}
                     <code className="secret">{challenge.mfa_secret}</code>
                   </div>
                 )}

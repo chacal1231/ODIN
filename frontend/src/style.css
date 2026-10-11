@@ -211,6 +211,13 @@ small {
   padding: 20px;
   margin: 20px 0;
 }
+.totp-qr {
+  display: block;
+  width: 220px;
+  max-width: 100%;
+  margin: 16px 0 0;
+  border-radius: 8px;
+}
 .secret {
   display: block;
   overflow-wrap: anywhere;

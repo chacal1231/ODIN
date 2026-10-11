@@ -1,0 +1,49 @@
+# WAN without a domain: HTTPS on ODIN_WAN_PORT with a certificate from Caddy's own CA for ODIN_WAN_HOST.
+# docker compose -f compose.yaml -f compose.wan.yaml up --build -d
+# Use together with compose.yaml; same project and PostgreSQL volume.
+x-wan-env: &wan-env
+  ODIN_ORIGIN: https://${ODIN_WAN_HOST:?Define ODIN_WAN_HOST en .env}:${ODIN_WAN_PORT:-8090}
+  ODIN_SECURE_COOKIES: 'true'
+services:
+  api:
+    environment: *wan-env
+    # Client IPs for rate limiting come only from this Caddy.
+    command: [uvicorn, 'odin.main:app', --host, 0.0.0.0, --port, '8000', --proxy-headers, --forwarded-allow-ips, '172.30.91.2', --no-access-log]
+    networks:
+      default: {}
+      wan_edge:
+        ipv4_address: 172.30.91.3
+  worker:
+    environment: *wan-env
+  analyst:
+    environment: *wan-env
+  telegram:
+    environment: *wan-env
+  probe:
+    environment: *wan-env
+  tracer:
+    environment: *wan-env
+  web:
+    environment:
+      ODIN_WAN_HOST: ${ODIN_WAN_HOST}
+      ODIN_WAN_PORT: ${ODIN_WAN_PORT:-8090}
+      ODIN_WAN_ALLOW: ${ODIN_WAN_ALLOW:-0.0.0.0/0 ::/0}
+    ports: !override
+      - '${ODIN_WAN_PORT:-8090}:${ODIN_WAN_PORT:-8090}'
+    volumes:
+      - ./deploy/Caddyfile.wan:/etc/caddy/Caddyfile:ro
+      # Keeps the CA and certificate across restarts: browsers trust it once.
+      - caddy_wan_data:/data
+      - caddy_wan_config:/config
+    networks:
+      default: {}
+      wan_edge:
+        ipv4_address: 172.30.91.2
+networks:
+  wan_edge:
+    ipam:
+      config:
+        - subnet: 172.30.91.0/24
+volumes:
+  caddy_wan_data:
+  caddy_wan_config:
