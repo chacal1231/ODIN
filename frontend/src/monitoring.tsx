@@ -274,7 +274,7 @@ export function StatusBar({
       </span>
       <span className={"status-age" + (stale ? " stale" : "")}>
         {failed && data ? "Sin conexión · " : ""}
-        {age == null ? "Sin actualizar" : "Actualizado hace " + ago(age)}
+        {age == null ? "Sin actualizar" : "hace " + ago(age)}
       </span>
       {healthOpen && issues.length > 0 && (
         <ul className="odin-health" aria-label="Avisos de ODIN">

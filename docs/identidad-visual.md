@@ -24,6 +24,14 @@ ODIN es una consola de operación, no un sitio de marca. Reglas:
 - **Cabecera**: hora UTC junto a la zona elegida (proveedores, logs y tickets hablan en UTC) y el nombre del ISP (`ODIN_ISP_NAME`) bajo ODIN.
 - **Tema por defecto: Sistema**. Cada operador elige Claro u Oscuro.
 
+## Navegación (11 de octubre de 2026)
+
+- **Inicio es la bandeja de ODIN**: *Necesita de ti* (lo crítico primero y, dentro de cada nivel, lo más antiguo; la salud de ODIN después de la red), *En curso* y *Resuelto en el turno* (12 h), con la salud de ODIN como fila de indicadores. El tablero anterior sigue en la pestaña **Panorama**. Los datos salen de `GET /api/v1/inbox`.
+- **Los detalles se abren en un panel lateral** (`drawer.tsx`): casos, incidentes, comprobaciones y OLTs, sin perder la lista. Se cierra con Esc, con ✕ o con un clic fuera.
+- **Enlaces directos**: `#caso=`, `#incidente=`, `#olt=` y `#comprobacion=<id>` abren el detalle en su vista. Cada panel tiene **Copiar enlace**.
+- **El menú muestra los pendientes** sin reconocer de Casos, Incidentes y OLTs.
+- **La cabecera** tiene el reloj y el usuario; tema, zona horaria, Mi acceso y Salir están en el menú del usuario.
+
 Contraste comprobado (WCAG AA, al menos 4.5:1) para texto, texto secundario, insignias de estado y botones en ambos temas.
 
 ## Logo

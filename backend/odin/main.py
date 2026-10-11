@@ -401,3 +401,6 @@ app.include_router(analyst_router(current, admin))
 
 from .olts.api import router as olts_router
 app.include_router(olts_router(current, admin))
+
+from .inbox import router as inbox_router
+app.include_router(inbox_router(current))

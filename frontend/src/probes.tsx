@@ -1,6 +1,7 @@
 import { useEffect, useState, useRef, FormEvent } from "react";
 import { Paged } from "./pager";
 import { Traces } from "./traces";
+import { Drawer } from "./drawer";
 import "./probes.css";
 import { MonitoringNavigator, DestinationOrganization } from "./monitoring";
 type Api = (path: string, method?: string, body?: unknown) => Promise<any>;
@@ -194,7 +195,7 @@ export function Destinations({
   focus,
 }: Props & {
   scope: "network" | "external";
-  focus?: { popId?: string; linkId?: string; destinationId?: string };
+  focus?: { popId?: string; linkId?: string; destinationId?: string; targetId?: string };
 }) {
   const [organization, setOrganization] = useState<any>(null),
     [destinationId, setDestinationId] = useState(focus?.destinationId || ""),
@@ -211,7 +212,7 @@ export function Destinations({
     [busy, setBusy] = useState(false),
     [filter, setFilter] = useState(""),
     [editor, setEditor] = useState<any>(null),
-    [selected, setSelected] = useState<string | null>(null),
+    [selected, setSelected] = useState<string | null>(focus?.targetId || null),
     [profileEditor, setProfileEditor] = useState<any>(null);
   async function load() {
     const [m, p, o, c] = await Promise.all([
@@ -1047,6 +1048,7 @@ export function Destinations({
         </section>
       )}
       {selected && (
+        <Drawer label={"Comprobación · " + (targets.find((t) => t.id === selected)?.name || "")} link={"#comprobacion=" + selected} onClose={() => setSelected(null)}>
         <TargetDetail
           key={selected}
           id={selected}
@@ -1057,6 +1059,7 @@ export function Destinations({
           zone={zone}
           onClose={() => setSelected(null)}
         />
+        </Drawer>
       )}
       <details className="panel probe-panel">
         <summary>Perfiles de sondeo</summary>
@@ -1768,6 +1771,7 @@ export function Incidents({
         )}
       </section>
       {detail && (
+        <Drawer label={"Incidente · " + detail.target_name} link={"#incidente=" + detail.id} onClose={() => { setId(null); setDetail(null); }}>
         <section className="panel probe-panel">
           <div className="title-row">
             <h2>
@@ -1867,6 +1871,7 @@ export function Incidents({
             <p className="muted">Se muestran los últimos 200 registros.</p>
           )}
         </section>
+        </Drawer>
       )}
     </>
   );

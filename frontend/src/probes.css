@@ -349,8 +349,9 @@
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  gap: 6px 16px;
-  padding: 8px 32px;
+  /* One line on a desktop; the health list, when open, takes its own line below. */
+  gap: 4px 10px;
+  padding: 5px 24px;
   background: var(--surface);
   border-bottom: 1px solid var(--border);
   box-shadow: inset 4px 0 var(--status-color);
@@ -371,7 +372,7 @@
   display: flex;
   align-items: center;
   gap: 8px;
-  font-size: 14px;
+  font-size: 13px;
   margin-right: 8px;
 }
 .status-dot {
@@ -383,13 +384,14 @@
 .status-count {
   background: transparent;
   color: var(--text);
-  padding: 4px 6px;
+  padding: 2px 4px;
   font-weight: 500;
-  font-size: 13px;
+  font-size: 12px;
+  white-space: nowrap;
 }
 .status-count b {
   font-variant-numeric: tabular-nums;
-  font-size: 15px;
+  font-size: 14px;
 }
 .status-count.critical b {
   color: var(--crit);
@@ -443,6 +445,8 @@
 }
 .status-age {
   margin-left: auto;
+  font-size: 12px;
+  white-space: nowrap;
   color: var(--muted);
   font-variant-numeric: tabular-nums;
 }

@@ -1,4 +1,5 @@
 import { FormEvent, useEffect, useRef, useState } from "react";
+import { Drawer } from "./drawer";
 import { Paged } from "./pager";
 import { ProbeBadge } from "./probes";
 import { CaseAnalysis } from "./analysis";
@@ -119,8 +120,9 @@ export function Cases({ api, zone, admin, focusId, onAsk }: { api: Api; zone: st
       </table></div>}
       {data?.next && <button className="quiet" onClick={() => void loadMore()}>Cargar más</button>}
     </section>
-    {selected && <CaseDetail api={api} zone={zone} admin={admin} id={selected} onSelect={setSelected} onChange={() => setRefresh((n) => n + 1)} onAsk={onAsk}
-      onDraft={setDraft} onKnowledge={(k) => { setKnowledgeFocus(null); window.setTimeout(() => setKnowledgeFocus(k)); }} />}
+    {selected && <Drawer label="Caso" link={"#caso=" + selected} onClose={() => setSelected(null)}>
+      <CaseDetail api={api} zone={zone} admin={admin} id={selected} onSelect={setSelected} onChange={() => setRefresh((n) => n + 1)} onAsk={onAsk}
+      onDraft={setDraft} onKnowledge={(k) => { setSelected(null); setKnowledgeFocus(null); window.setTimeout(() => setKnowledgeFocus(k)); }} /></Drawer>}
     <KnowledgePanel api={api} admin={admin} draft={draft} focusId={knowledgeFocus} onDone={() => setDraft(null)} />
   </>;
 }

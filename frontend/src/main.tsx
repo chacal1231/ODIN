@@ -10,6 +10,7 @@ import { Chat, ChatCase } from "./chat";
 import { OperationsOverview, StatusBar, useMonitoring } from "./monitoring";
 import { Inventory, IntegrationManager, statusNames } from "./inventory";
 import { Olts } from "./olts";
+import { Inbox } from "./inbox";
 
 type User = {
   id: string;
@@ -103,7 +104,12 @@ function App() {
     popId?: string;
     linkId?: string;
     destinationId?: string;
+    targetId?: string;
   }>({});
+  const [oltFocus, setOltFocus] = useState("");
+  const [inbox, setInbox] = useState<any>(null),
+    [homeTab, setHomeTab] = useState<"bandeja" | "panorama">("bandeja"),
+    [menu, setMenu] = useState(false);
   const [incidentFocus, setIncidentFocus] = useState("");
   const [caseFocus, setCaseFocus] = useState("");
   const [chatCase, setChatCase] = useState<ChatCase | null>(null);
@@ -121,6 +127,7 @@ function App() {
     setMonitorFocus({});
     setIncidentFocus("");
     setCaseFocus("");
+    setOltFocus("");
     setChatCase(null);
     setPage(next);
     setError("");
@@ -153,18 +160,41 @@ function App() {
     window.addEventListener("session-expired", expire);
     return () => window.removeEventListener("session-expired", expire);
   }, []);
-  // Links from Telegram open one case: /#caso=<id>.
+  // Direct links (Telegram, the inbox, "Copiar enlace"): /#caso=, #incidente=, #olt=, #comprobacion=<id>.
   useEffect(() => {
-    const found = /^#caso=([\w-]{36})$/.exec(window.location.hash);
-    if (!user || !found) return;
-    go("Casos"); setCaseFocus(found[1]);
-    history.replaceState(null, "", window.location.pathname);
+    if (!user) return;
+    async function open() {
+      const found = /^#(caso|incidente|olt|comprobacion)=([\w.:-]{1,120})$/.exec(window.location.hash);
+      if (!found) return;
+      // Cleared so that opening the same link again fires again.
+      history.replaceState(null, "", window.location.pathname);
+      const [, kind, id] = found;
+      if (kind === "caso") { go("Casos"); setCaseFocus(id); }
+      else if (kind === "incidente") { go("Incidentes"); setIncidentFocus(id); }
+      else if (kind === "olt") { go("OLTs"); setOltFocus(id); }
+      else {
+        const target = (await api("/targets").catch(() => [])).find((t: any) => t.id === id);
+        go(target && !(target.categories || []).includes("red_propia") ? "Servicios externos" : "Red propia");
+        setMonitorFocus({ targetId: id });
+      }
+    }
+    void open();
+    window.addEventListener("hashchange", open);
+    return () => window.removeEventListener("hashchange", open);
   }, [user]);
   useEffect(() => {
     if (!user) return;
     void refresh();
     const timer=setInterval(()=>void refresh(),15000);
     return ()=>clearInterval(timer);
+  }, [user]);
+  // The inbox feeds the home page and the pending counts of the menu.
+  useEffect(() => {
+    if (!user) return;
+    const load = () => api("/inbox").then(setInbox).catch(() => {});
+    void load();
+    const timer = setInterval(() => void load(), 15000);
+    return () => clearInterval(timer);
   }, [user]);
   async function login(e: FormEvent<HTMLFormElement>) {
     e.preventDefault();
@@ -324,6 +354,7 @@ function App() {
                   >
                     <span aria-hidden="true">{sectionIcons[x]}</span>
                     {x}
+                    {inbox?.counts?.[x] > 0 && <b className="nav-count" aria-label={inbox.counts[x] + " pendientes"}>{inbox.counts[x]}</b>}
                   </button>
                 ))}
             </div>
@@ -337,39 +368,42 @@ function App() {
           </span>
           <div className="header-actions">
             <Clock zone={zone} />
-            <ThemePicker theme={theme} onChange={setTheme} />
-            <select
-              aria-label="Zona horaria"
-              value={zone}
-              onChange={(e) => setZone(e.target.value)}
-            >
-              {[...new Set([zone, "UTC", "America/Bogota"])].map((z) => (
-                <option key={z}>{z}</option>
-              ))}
-            </select>
-            <span>
-              <button className="quiet" onClick={() => setPage("Mi acceso")}>
-                {user.username}
-              </button>{" "}
-              <small>
-                {user.role === "admin" ? "Administrador" : "Operador"}
-              </small>
-            </span>
-            <button
-              className="quiet"
-              onClick={async () => {
-                try {
-                  await api("/auth/logout", "POST");
-                  setUser(null);
-                  setCodes([]);
-                  csrf = "";
-                } catch (e) {
-                  setError((e as Error).message);
-                }
-              }}
-            >
-              Salir
-            </button>
+            {/* Appearance, time zone and session live in the user menu: the header keeps the clock and who is in. */}
+            <div className="user-menu">
+              <button className="quiet" aria-expanded={menu} onClick={() => setMenu(!menu)}>
+                {user.username} <small>{user.role === "admin" ? "Administrador" : "Operador"}</small> ▾
+              </button>
+              {menu && (
+                <div className="user-menu-panel" role="menu">
+                  <ThemePicker theme={theme} onChange={setTheme} />
+                  <label>
+                    Zona horaria
+                    <select aria-label="Zona horaria" value={zone} onChange={(e) => setZone(e.target.value)}>
+                      {[...new Set([zone, "UTC", "America/Bogota"])].map((z) => (
+                        <option key={z}>{z}</option>
+                      ))}
+                    </select>
+                  </label>
+                  <button className="secondary" role="menuitem" onClick={() => { setMenu(false); go("Mi acceso"); }}>Mi acceso</button>
+                  <button
+                    className="secondary"
+                    role="menuitem"
+                    onClick={async () => {
+                      try {
+                        await api("/auth/logout", "POST");
+                        setUser(null);
+                        setCodes([]);
+                        csrf = "";
+                      } catch (e) {
+                        setError((e as Error).message);
+                      }
+                    }}
+                  >
+                    Salir
+                  </button>
+                </div>
+              )}
+            </div>
           </div>
         </header>
         <StatusBar monitor={monitor} onNavigate={go} />
@@ -397,9 +431,18 @@ function App() {
           {page === "Inicio" ? (
             <>
               <div className="title-row">
-                <div>
-                  <h1>Centro de operaciones</h1>
+                <h1>{homeTab === "bandeja" ? "Bandeja de ODIN" : "Panorama de la red"}</h1>
+                <div className="home-tabs" role="tablist">
+                  {(["bandeja", "panorama"] as const).map((t) => (
+                    <button key={t} role="tab" aria-selected={homeTab === t} className={homeTab === t ? "" : "secondary"} onClick={() => setHomeTab(t)}>
+                      {t === "bandeja" ? "Bandeja" : "Panorama"}
+                    </button>
+                  ))}
                 </div>
+              </div>
+              {homeTab === "bandeja" ? <Inbox data={inbox} zone={zone} onNavigate={go} /> : <>
+              <div className="title-row">
+                <small className="muted">Monitoreo, incidentes y fuentes</small>
                 <button
                   className="secondary"
                   onClick={() => {
@@ -451,6 +494,7 @@ function App() {
                   ))}
                 </div>
               </section>
+              </>}
             </>
           ) : page === "Mapa e inventario" ? (
             <Inventory
@@ -464,10 +508,10 @@ function App() {
               onError={setError}
             />
           ) : page === "OLTs" ? (
-            <Olts api={api} zone={zone} admin={user.role === "admin"} onError={setError} />
+            <Olts key={oltFocus || "all"} focusId={oltFocus || undefined} api={api} zone={zone} admin={user.role === "admin"} onError={setError} />
           ) : page === "Red propia" || page === "Servicios externos" ? (
             <Destinations
-              key={page}
+              key={page + (monitorFocus.targetId || "")}
               focus={monitorFocus}
               scope={page === "Red propia" ? "network" : "external"}
               api={api}

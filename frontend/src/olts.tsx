@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { Drawer } from "./drawer";
 type Api = (path: string, method?: string, body?: unknown) => Promise<any>;
 type Props = { api: Api; zone: string; admin: boolean; onError: (s: string) => void };
 const causes: Record<string, string> = {
@@ -230,9 +231,9 @@ function Detail({ api, admin, zone, onError, id, onClose }: Props & { id: string
   );
 }
 
-export function Olts(props: Props) {
-  const { api, zone, onError } = props;
-  const [data, setData] = useState<any>(null), [selected, setSelected] = useState<string | null>(null);
+export function Olts(props: Props & { focusId?: string }) {
+  const { api, onError } = props;
+  const [data, setData] = useState<any>(null), [selected, setSelected] = useState<string | null>(props.focusId || null);
   const load = () => api("/olts").then(setData).catch((e) => onError((e as Error).message));
   useEffect(() => {
     void load();
@@ -281,7 +282,11 @@ export function Olts(props: Props) {
           </div>
         )}
       </section>
-      {selected && <Detail {...props} id={selected} onClose={() => setSelected(null)} />}
+      {selected && (
+        <Drawer label={"OLT · " + (data.olts.find((o: any) => o.id === selected)?.name || "")} link={"#olt=" + selected} onClose={() => setSelected(null)}>
+          <Detail {...props} id={selected} onClose={() => setSelected(null)} />
+        </Drawer>
+      )}
     </>
   );
 }
