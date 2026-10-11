@@ -4,7 +4,7 @@ import re
 from datetime import datetime,timezone
 from sqlalchemy import select, text, delete, func
 from sqlalchemy.dialects.postgresql import insert
-from ..models import ProbeSeries, ProbeRound, ProbeRollup, ProbeOrigin, ProbeBatch, ProbeIncident, ProbeIncidentEvent
+from ..models import ProbeSeries, ProbeRound, ProbeRollup, ProbeOrigin, ProbeBatch, ProbeIncident, ProbeIncidentEvent, ProbeTrace
 
 
 def expected_slots(series,start,end):
@@ -75,6 +75,10 @@ def upkeep(db,stamp):
         db.execute(delete(ProbeBatch).where(finished,ProbeBatch.mode=='scheduled',ProbeBatch.finished_at<stamp-2*86400))
         db.execute(delete(ProbeBatch).where(finished,ProbeBatch.finished_at<stamp-14*86400))
         old=select(ProbeIncident.id).where(ProbeIncident.closed_at<stamp-366*86400)
+        # Traces: baselines 3 days, those that saw a path change and manual ones 90 days, incident ones with their incident.
+        db.execute(delete(ProbeTrace).where(ProbeTrace.reason=='baseline',ProbeTrace.path_changed.is_not(True),ProbeTrace.slot<stamp-3*86400))
+        db.execute(delete(ProbeTrace).where(ProbeTrace.reason.in_(['baseline','manual']),ProbeTrace.slot<stamp-90*86400))
+        db.execute(delete(ProbeTrace).where(ProbeTrace.incident_id.in_(old)))
         db.execute(delete(ProbeIncidentEvent).where(ProbeIncidentEvent.incident_id.in_(old)))
         db.execute(delete(ProbeIncident).where(ProbeIncident.closed_at<stamp-366*86400))
         origin.retention_at=stamp

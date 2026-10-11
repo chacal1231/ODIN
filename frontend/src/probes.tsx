@@ -1,5 +1,6 @@
 import { useEffect, useState, useRef, FormEvent } from "react";
 import { Paged } from "./pager";
+import { Traces } from "./traces";
 import "./probes.css";
 import { MonitoringNavigator, DestinationOrganization } from "./monitoring";
 type Api = (path: string, method?: string, body?: unknown) => Promise<any>;
@@ -1470,6 +1471,7 @@ function TargetDetail({
           ? "El histórico agregado muestra la media ponderada de latencia."
           : `Ventana de ${series?.config.window_seconds || target?.effective.window_seconds || 300} segundos.`}
       </p>
+      <Traces api={api} targetId={id} zone={zone} onError={onError} />
       <details>
         <summary>Últimas ejecuciones</summary>
         <p className="muted">Las pruebas manuales no generan incidentes.</p>
@@ -1836,6 +1838,9 @@ export function Incidents({
             </label>
             <button disabled={busy || !note.trim()}>Añadir observación</button>
           </form>
+          {detail.traces?.length > 0 && (
+            <Traces api={api} items={detail.traces} zone={zone} onError={onError} />
+          )}
           <ol className="probe-timeline">
             {detail.events.map((e: any) => (
               <li key={e.id}>

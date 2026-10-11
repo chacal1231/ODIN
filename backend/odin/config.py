@@ -15,6 +15,7 @@ class Settings(BaseSettings):
     map_tile_url: str = 'https://tile.openstreetmap.org/{z}/{x}/{y}.png'
     probe_concurrency: int = 24
     probe_max_addresses: int = 256
+    trace_concurrency: int = 4
     idle_seconds: int = 1800
     session_seconds: int = 43200
 
@@ -28,6 +29,8 @@ class Settings(BaseSettings):
             raise ValueError('Cookies sin Secure solo permitidas en desarrollo local')
         if not 1 <= self.probe_concurrency <= 32 or not 1 <= self.probe_max_addresses <= 512:
             raise ValueError('Capacidad de sondeos inválida')
+        if not 1 <= self.trace_concurrency <= 16:
+            raise ValueError('Capacidad de trazas inválida')
         if self.idle_seconds <= 0 or self.session_seconds <= 0:
             raise ValueError('Duración de sesión inválida')
         Fernet(Path(self.master_key_file).read_bytes().strip())

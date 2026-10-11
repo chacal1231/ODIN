@@ -21,6 +21,10 @@ services:
     environment:
       ODIN_ORIGIN: https://odin.example.com
       ODIN_SECURE_COOKIES: 'true'
+  tracer:
+    environment:
+      ODIN_ORIGIN: https://odin.example.com
+      ODIN_SECURE_COOKIES: 'true'
   web:
     ports: !override
       - '80:80'

@@ -57,6 +57,7 @@ La cola admite idempotencia, lease con heartbeat, recuperación tras expiración
 - [Organización del monitoreo](docs/organizacion-monitoreo.md)
 - [Catálogo de hyperscalers](docs/catalogo-hyperscalers.md)
 - [Vigilancia de ODIN](docs/vigilancia-odin.md): el sondeador, los lectores de eventos y la cola se vigilan a sí mismos y los avisos aparecen en la barra de estado.
+- [Trazas de ruta](docs/trazas-de-ruta.md): mtr hacia cada destino cada 15 minutos y en cada incidente, con cada salto leído contra el inventario.
 - [Identidad visual](docs/identidad-visual.md)
 
 ### Organización del monitoreo

@@ -1,6 +1,6 @@
 """ODIN self-supervision: failures of its own pipeline must be visible to the NOC, not found days later."""
 from sqlalchemy import select, func
-from .models import ProbeTarget, ProbeBatch, EventCollector, Integration, Job, now
+from .models import ProbeTarget, ProbeBatch, ProbeOrigin, EventCollector, Integration, Job, now
 from .probes.service import origin_view, slot_at
 from .events.collector import INTERVALS
 
@@ -49,6 +49,19 @@ def probe_checks(db, stamp):
     return [check('probe_rate', state, 'Sondeador atrasado',
         f'{produced} de {expected} rondas programadas en los últimos {RATE_WINDOW // 60} minutos '
         f'({round(ratio * 100)} %). Las rondas omitidas no se recuperan.', 'Red propia')]
+
+
+def trace_checks(db, stamp):
+    """Traces are diagnostics, not measurements: a stopped tracer is a warning."""
+    if not db.scalar(select(ProbeTarget.id).where(ProbeTarget.enabled.is_(True), ProbeTarget.archived.is_(False)).limit(1)):
+        return []
+    origin = db.get(ProbeOrigin, 'tracer')
+    if origin and origin.heartbeat >= stamp - 90 and not origin.error_code:
+        return []
+    detail = ('Sin señal desde hace ' + duration(stamp - origin.heartbeat) + '.' if origin else 'El trazador no se ha iniciado.')
+    if origin and origin.error_code:
+        detail += ' Error: ' + origin.error_code + '.'
+    return [check('tracer', 'warning', 'Trazas detenidas', detail + ' Las mediciones siguen; no hay trazas nuevas.', 'Red propia')]
 
 
 def event_checks(db, stamp):
@@ -132,6 +145,6 @@ def duration(seconds):
 
 def evaluate(db, stamp=None):
     stamp = stamp or now()
-    checks = probe_checks(db, stamp) + event_checks(db, stamp) + correlation_checks(db, stamp) + analyst_checks(db, stamp) + job_checks(db, stamp)
+    checks = probe_checks(db, stamp) + trace_checks(db, stamp) + event_checks(db, stamp) + correlation_checks(db, stamp) + analyst_checks(db, stamp) + job_checks(db, stamp)
     state = max((c['state'] for c in checks), key=RANK.get, default='healthy')
     return {'state': state, 'checks': checks, 'evaluated_at': stamp}

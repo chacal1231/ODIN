@@ -9,7 +9,8 @@ from test_probes import target
 
 
 def origin(db, stamp, age=0):
-    db.add(ProbeOrigin(id='odin', heartbeat=stamp - age));db.commit()
+    # The tracer runs beside the probe; its own silence is tested in test_traces.
+    db.add(ProbeOrigin(id='odin', heartbeat=stamp - age));db.add(ProbeOrigin(id='tracer', heartbeat=stamp));db.commit()
 
 
 def scheduled(db, t, stamp, keep=1.0):

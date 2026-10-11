@@ -7,7 +7,7 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 from ..db import get_db
 from ..models import (Pop, ProbeProfile, ProbeProfileVersion, ProbeTarget, ProbeBatch, ProbeSeries,
-    ProbeRound, ProbeRollup, ProbeIncident, ProbeIncidentEvent, ProbeMaintenance, MonitoringDestination, Device, InventoryLink, CaseEvidence, now, uid)
+    ProbeRound, ProbeRollup, ProbeIncident, ProbeIncidentEvent, ProbeMaintenance, ProbeTrace, MonitoringDestination, Device, InventoryLink, CaseEvidence, now, uid)
 from ..security import audit, rate_limit
 from .config import TransportConfig, measurement_config, ProbeConfig, DEFAULT_PROFILE_ID, DEFAULT_VERSION_ID, host, safe_ip, seed_defaults
 from .resolver import resolve, ProbeError
@@ -15,6 +15,7 @@ from .service import lock, effective, capacity, changed, next_slot, origin_view,
 from .catalog import CATEGORIES, CATEGORY_IDS
 from .organization import ensure_destination, overview as monitoring_overview
 from .detector import window_metrics, record_configuration
+from . import trace
 
 
 class TargetBody(BaseModel):
@@ -115,6 +116,17 @@ def target_or_404(db,key):
 def incident_view(row,names):
     return {**{key:getattr(row,key) for key in ('id','target_id','address','pop_id','opened_at','closed_at','severity',
         'conditions','profile','acknowledged_at','acknowledged_by')},'target_name':names.get(row.target_id,row.target_id)}
+
+
+TRACE_FIELDS=('id','target_id','address','protocol','port','reason','incident_id','slot','status','finished_at','error_code',
+    'reached','path','path_changed')
+
+
+def trace_view(row,hops=False):
+    view={key:getattr(row,key) for key in TRACE_FIELDS}
+    view['hop_count']=len(row.hops or [])
+    if hops:view['hops']=row.hops
+    return view
 
 
 def router(current,admin):
@@ -277,6 +289,31 @@ def router(current,admin):
         return [{key:getattr(row,key) for key in ('id','mode','status','slot','finished_at','error_code','result')} for row in db.scalars(
             select(ProbeBatch).where(ProbeBatch.target_id==target_id).order_by(ProbeBatch.slot.desc()).limit(20))]
 
+    @api.get('/targets/{target_id}/traces')
+    def traces(target_id:str,user=Depends(current),db:Session=Depends(get_db)):
+        target_or_404(db,target_id)
+        return [trace_view(row) for row in db.scalars(select(ProbeTrace).where(ProbeTrace.target_id==target_id)
+            .order_by(ProbeTrace.slot.desc(),ProbeTrace.id).limit(50))]
+
+    @api.post('/targets/{target_id}/traces',status_code=202)
+    def request_trace(target_id:str,user=Depends(current),db:Session=Depends(get_db)):
+        # Operators diagnose too; the address is always one the check already measures.
+        rate_limit(db,'probe-trace:'+user.id,10)
+        row=db.scalar(select(ProbeTarget).where(ProbeTarget.id==target_id).with_for_update())
+        if not row or row.archived:raise HTTPException(404,'Destino no disponible')
+        existing=db.scalar(select(ProbeTrace).where(ProbeTrace.target_id==target_id,ProbeTrace.reason=='manual',ProbeTrace.status.in_(['pending','running'])))
+        if existing:db.commit();return trace_view(existing)
+        key=trace.request(db,row,'manual',now(),actor_id=user.id)
+        if not key:raise HTTPException(422,'El destino aún no tiene direcciones resueltas')
+        audit(db,'probe_trace_requested',user.id,target_id);db.commit()
+        return trace_view(db.get(ProbeTrace,key))
+
+    @api.get('/traces/{trace_id}')
+    def trace_detail(trace_id:str,user=Depends(current),db:Session=Depends(get_db)):
+        row=db.get(ProbeTrace,trace_id)
+        if not row:raise HTTPException(404,'Traza no encontrada')
+        return trace_view(row,hops=True)
+
     @api.get('/targets/{target_id}/measurements')
     def measurements(target_id:str,hours:int=Query(1,ge=1,le=8760),user=Depends(current),db:Session=Depends(get_db)):
         target=target_or_404(db,target_id);stamp=now();start=stamp-hours*3600
@@ -359,7 +396,8 @@ def router(current,admin):
         target=target_or_404(db,row.target_id)
         events=list(db.scalars(select(ProbeIncidentEvent).where(ProbeIncidentEvent.incident_id==row.id).order_by(ProbeIncidentEvent.created_at.desc(),ProbeIncidentEvent.id).limit(201)))
         case_id=db.scalar(select(CaseEvidence.case_id).where(CaseEvidence.source=='probe',CaseEvidence.role=='trigger',CaseEvidence.ref==row.id))
-        return {**incident_view(row,{target.id:target.name}),'target':target_views(db,[target])[0],'case_id':case_id,
+        linked=[trace_view(t) for t in db.scalars(select(ProbeTrace).where(ProbeTrace.incident_id==row.id).order_by(ProbeTrace.slot))]
+        return {**incident_view(row,{target.id:target.name}),'target':target_views(db,[target])[0],'case_id':case_id,'traces':linked,
                 'events':[{'id':e.id,'kind':e.kind,'at':e.created_at,'actor_id':e.actor_id,'data':e.data} for e in events[:200]],'events_truncated':len(events)>200}
 
     @api.post('/incidents/{incident_id}/acknowledgments')

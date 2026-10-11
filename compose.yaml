@@ -91,6 +91,26 @@ services:
       timeout: 5s
       retries: 3
     restart: unless-stopped
+  tracer:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile.probe
+    env_file: .env
+    volumes:
+      - ./.secrets/master.key:/run/secrets/master.key:ro
+    command: [python, -m, odin.probes.trace]
+    cap_drop: [ALL]
+    cap_add: [NET_RAW]
+    security_opt: [no-new-privileges:true]
+    read_only: true
+    tmpfs: [/tmp]
+    mem_limit: 512m
+    pids_limit: 64
+    cpus: 1.0
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+    restart: unless-stopped
   web:
     build: ./frontend
     ports:

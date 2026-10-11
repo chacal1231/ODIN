@@ -378,6 +378,32 @@ class ProbeOrigin(Base):
     retention_at = Column(BigInteger)
 
 
+class ProbeTrace(Base):
+    """One mtr run towards an approved address of a check, with every hop read against the inventory."""
+    __tablename__ = 'probe_traces'
+    id = Column(String(36), primary_key=True, default=uid)
+    target_id = Column(ForeignKey('probe_targets.id'), nullable=False)
+    address = Column(String(45), nullable=False)
+    protocol = Column(String(10), nullable=False)
+    port = Column(Integer)
+    reason = Column(String(20), nullable=False)
+    incident_id = Column(ForeignKey('probe_incidents.id'), index=True)
+    actor_id = Column(String(36))
+    slot = Column(BigInteger, nullable=False)
+    status = Column(String(20), nullable=False, default='pending')
+    token = Column(String(36))
+    lease_until = Column(BigInteger)
+    finished_at = Column(BigInteger)
+    error_code = Column(String(80))
+    reached = Column(Boolean)
+    hops = Column(JSON, nullable=False, default=list)
+    path = Column(JSON, nullable=False, default=dict)
+    fingerprint = Column(String(64))
+    path_changed = Column(Boolean)
+    __table_args__ = (Index('ix_probe_traces_target', 'target_id', 'slot'),
+        Index('ix_probe_traces_active', 'status', 'slot', postgresql_where=text("status IN ('pending','running')")))
+
+
 class ProbeCatalog(Base):
     __tablename__ = 'probe_catalogs'
     id = Column(String(80), primary_key=True)

@@ -894,3 +894,28 @@ i.traffic-out {
   white-space: pre-wrap;
   margin: 4px 0;
 }
+
+.trace-row {
+  cursor: pointer;
+}
+.trace-row.selected,
+.trace-row:hover {
+  background: var(--selected);
+}
+.trace-row .badge + .badge {
+  margin-left: 6px;
+}
+.trace-hops td:first-child {
+  min-width: 0;
+  width: 2.5em;
+}
+.trace-hops .trace-own td:nth-child(3) {
+  color: var(--ok);
+}
+.trace-hops .trace-handoff td:nth-child(3) {
+  color: var(--accent-text);
+  font-weight: 600;
+}
+.trace-hops .trace-no_reply td {
+  color: var(--muted);
+}

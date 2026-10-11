@@ -3,6 +3,7 @@ import math
 from copy import deepcopy
 from sqlalchemy import select
 from ..models import ProbeRound, ProbeState, ProbeIncident, ProbeIncidentEvent, now
+from . import trace
 
 
 def window_metrics(rounds, config, slot, warm_since):
@@ -113,3 +114,6 @@ def evaluate(db,target,series,round_row,maintenance=False):
         db.add(ProbeIncidentEvent(incident_id=incident.id,kind=event,created_at=slot,data={
             'conditions':conditions,'severity':severity,'metrics':metrics,'profile':config,
             'series_id':series.id,'samples':round_row.samples}))
+    if event in ('opened','recovered'):
+        # The path during the fault and after it, to compare with the baseline.
+        trace.request(db,target,'incident_'+event,slot,incident_id=incident.id,preferred=series.address)
