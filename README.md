@@ -30,6 +30,23 @@ El navegador avisa del certificado la primera vez; el certificado se conserva en
 
 El administrador puede crear usuarios (contraseña temporal mostrada una vez), revocar sesiones, desactivar usuarios y guardar configuración cifrada de fuentes. Cada fuente se prueba desde Administración después de configurar sus redes permitidas; hasta entonces aparece como **sin validar**. Zabbix y LibreNMS importan inventario y eventos; Graylog y el analista LLM tienen sus lectores y controles en Eventos y Casos. El operador puede consultar el panel pero no administrar usuarios ni integraciones.
 
+### Modelo del analista
+
+Dos proveedores, uno activo a la vez, que el administrador elige en **Casos**:
+
+- **Modelo local (llama.cpp)**: `llama-server` en la red propia, con sus redes permitidas. Los datos no salen.
+- **DeepSeek (API)**: `https://api.deepseek.com`, API key y modelo (`deepseek-chat` por defecto, o `deepseek-reasoner`). Solo HTTPS hacia direcciones públicas. **Lo que se analiza sale de la red**: nombres de equipos, IPs, descripciones de puertos, extractos de logs y casos.
+
+Con los dos, cada respuesta se valida igual: si cita evidencias que no existen, se repara una vez o se descarta.
+
+### Telegram
+
+- `/grupo` en el grupo (o tema) del NOC: casos que avisan, diagnóstico y valoración.
+- `/proveedores` en el grupo interno de proveedores: cada falla de tránsito, transporte, IXP o peering abre un hilo con qué falla, desde cuándo y cada cambio hasta su cierre. **Responder al hilo** con el ticket del proveedor, su ETA o sus novedades lo guarda como nota del caso.
+- `/pausar` y `/reanudar` detienen o reanudan ambos.
+
+Solo administradores de ODIN con la cuenta vinculada (Mi acceso → Telegram) pueden configurar los grupos.
+
 MFA permite código TOTP o código de recuperación de un solo uso. No reutilizar el mismo TOTP en dos accesos dentro del mismo intervalo. La renovación de códigos requiere contraseña y factor válido; invalida todos los anteriores. La renovación está disponible para todos los usuarios desde su nombre en la cabecera → Mi acceso. Recuperación local cuando se pierde acceso:
 
 ```bash

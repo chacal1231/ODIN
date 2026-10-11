@@ -100,8 +100,8 @@ def correlation_checks(db, stamp):
 
 def analyst_checks(db, stamp):
     from .models import Analysis, AnalystState
-    integration = db.get(Integration, 'llama_server')
-    if not integration or not integration.events_enabled:
+    from .analyst.service import active
+    if not active(db):
         return []
     state = db.get(AnalystState, 'analyst')
     beat = state.heartbeat_at if state else None

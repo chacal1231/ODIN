@@ -83,7 +83,8 @@ const names: Record<string, string> = {
   zabbix: "Zabbix",
   librenms: "LibreNMS",
   graylog: "Graylog",
-  llama_server: "Qwen local",
+  llama_server: "Modelo local (llama.cpp)",
+  deepseek: "DeepSeek (API)",
 };
 
 function App() {

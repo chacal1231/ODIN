@@ -7,7 +7,10 @@ correction that later analyses of the same subject read.
 
 Inbound by polling Telegram (no open port). Only ODIN users who linked their account count: each one sends
 /vincular <code> (from «Mi acceso») to the bot. An administrator binds the group, or one of its forum topics, with /grupo in it, and can
-/pausar or /reanudar the messages. Linked users ask about the network with /pregunta [1h|6h|24h|7d] <question>, or
+/pausar or /reanudar the messages.
+Carrier incidents (transit, transport, IXP, peering) also go, one thread per case, to an internal providers group bound
+with /proveedores: what fails, since when, and every change until it closes. A reply of a linked user in that thread
+(the carrier's ticket, its ETA, what they said) becomes a note of the case, so the follow-up stays in ODIN. Linked users ask about the network with /pregunta [1h|6h|24h|7d] <question>, or
 about a case by replying to its thread; the chat of ODIN answers (one run at a time) and the answer is posted in the
 thread. Each question is also kept as a conversation of its author in ODIN.
 What is sent leaves the network: names, addresses and log excerpts of cases.
@@ -24,8 +27,8 @@ from sqlalchemy import select, update, func, or_
 from .config import settings
 from .db import session
 from .inventory.connectors import Transport, ConnectorError, clean
-from .models import (Analysis, Case, ChatMessage, Conversation, Integration, TelegramLink, TelegramMessage, TelegramPrompt, TelegramQuestion,
-                     TelegramState, User, now, uid)
+from .models import (Analysis, Case, CaseNote, ChatMessage, Conversation, Integration, TelegramLink, TelegramMessage, TelegramPrompt,
+                     TelegramProviderMessage, TelegramQuestion, TelegramState, User, now, uid)
 from .security import audit, decrypt
 
 ZONE = ZoneInfo('America/Bogota')
@@ -33,6 +36,7 @@ CODE_SECONDS = 600
 RENOTIFY = 600  # a case that drops again after recovering is announced at most every 10 minutes
 KINDS = {'bgp_session': 'Sesión BGP', 'interface': 'Interfaz', 'latency': 'Latencia hacia'}
 PERIODS = {'1h': 3600, '6h': 21600, '24h': 86400, '7d': 604800}
+CARRIER_ROLES = ('transit', 'transport', 'ixp', 'peering')
 VERDICTS = {'correct': '✅ Correcto', 'partial': '🟡 Parcialmente correcto', 'incorrect': '❌ Incorrecto'}
 stop = threading.Event()
 
@@ -171,6 +175,52 @@ def outbound(db, bot, st):
         db.delete(question);db.commit()
 
 
+def carrier(case):
+    """The port or neighbor summary of a case about a carrier link, or None."""
+    info = case.detail.get('neighbor') or case.detail.get('port') or {}
+    return info if info.get('role') in CARRIER_ROLES else None
+
+
+def provider_text(case, info):
+    # Transports are named by their whole description: the provider is not always its second word (roles.py).
+    name = info.get('description') if info.get('role') == 'transport' else (info.get('provider') or info.get('description'))
+    lines = [f'📡 <b>{esc(name or "Proveedor sin identificar", 200)}</b> · {esc(info.get("label") or info.get("role"), 40)}',
+             f'🔴 {esc(KINDS.get(case.kind, case.kind))} {esc(case.subject, 200)} · {esc(case.entity_label, 200)}']
+    if info.get('summary'):lines.append(esc(info['summary'], 600))
+    elif info.get('description'):lines.append(f'Puerto «{esc(info["description"], 300)}»')
+    lines.append(f'Desde {when(case.opened_at)} · {"crítico" if case.severity == "critical" else "advertencia"} · {case.drops} caída(s)')
+    lines.append('Responde a este mensaje con el ticket del proveedor y sus novedades: queda como nota del caso.')
+    lines.append(link(case))
+    return '\n'.join(lines)
+
+
+def providers(db, bot, st):
+    """Carrier incidents in the providers group, each in its own thread until the case closes."""
+    from .cases.summary import alerting
+    stamp = now()
+    known = set(db.scalars(select(TelegramProviderMessage.case_id)))
+    for case in alerting(db):
+        info = carrier(case)
+        if not info or case.id in known:continue
+        message = send(bot, st.providers_chat_id, provider_text(case, info), thread=st.providers_thread_id)
+        db.add(TelegramProviderMessage(case_id=case.id, chat_id=st.providers_chat_id, message_id=message['message_id'],
+                                       recovered=False, closed=False, notified_at=stamp))
+        db.commit()
+    for row, case in db.execute(select(TelegramProviderMessage, Case).join(Case, Case.id == TelegramProviderMessage.case_id)
+                                .where(TelegramProviderMessage.closed.is_(False))).all():
+        reply = lambda text: send(bot, row.chat_id, text, row.message_id, thread=st.providers_thread_id)
+        if case.state == 'closed':
+            end = case.closed_at or case.resolved_at or case.last_state_at
+            reply(f'✅ <b>Cerrado</b> · {esc(case.subject, 200)} · duró {span(end - case.opened_at)} · {case.drops} caída(s) en total')
+            row.recovered = row.closed = True;db.commit()
+        elif not row.recovered and case.last_state == 'up':
+            reply(f'🟡 <b>Restablecido, en observación</b> · {when(case.resolved_at or case.last_state_at)}. Se cierra si sigue estable.')
+            row.recovered = True;db.commit()
+        elif row.recovered and case.last_state == 'down' and stamp - row.notified_at > RENOTIFY:
+            reply(f'🔴 <b>Volvió a caer</b> · {when(case.last_state_at)} · {case.drops} caída(s)')
+            row.recovered, row.notified_at = False, stamp;db.commit()
+
+
 def answer_text(run):
     from .analyst.chat import LABEL
     if run.status != 'done' or not run.result:
@@ -255,7 +305,7 @@ def handle(db, bot, st, item):
         period = PERIODS.get(words[0].lower()) if words else None
         question = (words[1] if len(words) > 1 else '') if period else ' '.join(words)
         return ask(db, bot, st, user, question, message.get('message_id'), period or PERIODS['6h'])
-    if command in ('/grupo', '/pausar', '/reanudar'):
+    if command in ('/grupo', '/proveedores', '/pausar', '/reanudar'):
         user = linked(db, sender)
         if (message.get('chat') or {}).get('type') not in ('group', 'supergroup'):
             return reply('Hazlo desde el grupo del NOC (o desde su tema), no en privado.')
@@ -267,10 +317,22 @@ def handle(db, bot, st, item):
         if command == '/grupo':
             st.chat_id, st.thread_id, st.paused = chat, topic, False;audit(db, 'telegram_group_bound', user.id, f'{chat}/{topic or ""}')
             return reply('Este ' + ('tema' if topic else 'grupo') + ' recibirá los casos que avisan en ODIN, con su diagnóstico.')
+        if command == '/proveedores':
+            st.providers_chat_id, st.providers_thread_id = chat, topic;audit(db, 'telegram_providers_bound', user.id, f'{chat}/{topic or ""}')
+            return reply('Este ' + ('tema' if topic else 'grupo') + ' recibirá las fallas con proveedores (tránsito, transporte, IXP, peering). '
+                         'Respondan a cada una con el ticket y las novedades del proveedor.')
         if chat != st.chat_id:return reply('Este no es el grupo configurado. Usa /grupo primero.')
         st.paused = command == '/pausar';audit(db, 'telegram_paused' if st.paused else 'telegram_resumed', user.id, str(chat))
         return reply('Mensajes en pausa.' if st.paused else 'Mensajes reanudados.')
     replied = (message.get('reply_to_message') or {}).get('message_id')
+    followed = db.scalar(select(TelegramProviderMessage).where(TelegramProviderMessage.chat_id == chat,
+        TelegramProviderMessage.message_id == replied)) if replied and text and not command and chat == st.providers_chat_id else None
+    if followed:
+        user = linked(db, sender)
+        if not user:return reply('Vincula tu cuenta en ODIN → Mi acceso para registrar novedades.', message.get('message_id'))
+        db.add(CaseNote(case_id=followed.case_id, author_id=user.id, text=('Proveedor (Telegram): ' + text)[:4000]))
+        audit(db, 'case_note_added', user.id, followed.case_id)
+        return reply(f'📝 Registrado en el caso por {esc(user.username, 80)}.', message.get('message_id'))
     prompt = db.get(TelegramPrompt, replied) if replied and chat == st.chat_id and text else None
     user = linked(db, sender) if prompt else None
     if prompt and user and user.id == prompt.user_id:
@@ -308,6 +370,7 @@ def cycle():
         try:
             inbound(db, bot, st)
             if st.chat_id and not st.paused:outbound(db, bot, st)
+            if st.providers_chat_id and not st.paused:providers(db, bot, st)
             st.last_error = None
         except ConnectorError as exc:
             db.rollback();st = state(db);st.last_error = exc.code

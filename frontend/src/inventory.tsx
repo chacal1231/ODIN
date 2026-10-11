@@ -47,8 +47,9 @@ const sourceNames: Record<string, string> = {
   zabbix: "Zabbix",
   librenms: "LibreNMS",
   graylog: "Graylog",
-  llama_server: "Qwen local",
-  telegram: "Telegram · grupo del NOC",
+  llama_server: "Modelo local (llama.cpp)",
+  deepseek: "DeepSeek (API)",
+  telegram: "Telegram · grupos del NOC y de proveedores",
 };
 export const statusNames: Record<string, string> = {
   not_configured: "Sin configurar",
@@ -1242,6 +1243,7 @@ export function IntegrationManager({
     [networks, setNetworks] = useState(""),
     [secret, setSecret] = useState(""),
     [automatic, setAutomatic] = useState(false),
+    [model, setModel] = useState(""),
     [busy, setBusy] = useState(false),
     [message, setMessage] = useState(""),
     [runs, setRuns] = useState<Run[]>([]);
@@ -1261,6 +1263,7 @@ export function IntegrationManager({
     setEndpoint(row?.endpoint || "");
     setNetworks((row?.allowed_networks || []).join(", "));
     setAutomatic(row?.auto_sync || false);
+    setModel(row?.model || "");
     setSecret("");
     setMessage("");
   }, [kind, row?.version]);
@@ -1276,7 +1279,9 @@ export function IntegrationManager({
       setBusy(false);
     }
   }
-  const supported = kind === "zabbix" || kind === "librenms" || kind === "graylog" || kind === "llama_server" || kind === "telegram";
+  const supported = kind === "zabbix" || kind === "librenms" || kind === "graylog" || kind === "llama_server" || kind === "deepseek" || kind === "telegram";
+  // A model API is reached by public HTTPS address only: no allowed networks to configure.
+  const api_model = kind === "deepseek";
   // Graylog supplies logs, not inventory: connection test only.
   const inventory = kind === "zabbix" || kind === "librenms";
   const latest = runs.find((x) => x.source === kind);
@@ -1303,10 +1308,13 @@ export function IntegrationManager({
             await api("/admin/integrations/" + kind, "PUT", {
               endpoint,
               secret: secret || undefined,
-              allowed_networks: networks
-                .split(",")
-                .map((x) => x.trim())
-                .filter(Boolean),
+              allowed_networks: api_model
+                ? undefined
+                : networks
+                    .split(",")
+                    .map((x) => x.trim())
+                    .filter(Boolean),
+              model: api_model ? model || undefined : undefined,
               auto_sync: automatic,
               version: row?.version,
             });
@@ -1329,6 +1337,8 @@ export function IntegrationManager({
                   ? "http://graylog:9000"
                   : kind === "llama_server"
                     ? "http://172.18.0.1:8081"
+                    : kind === "deepseek"
+                      ? "https://api.deepseek.com"
                     : kind === "telegram"
                       ? "https://api.telegram.org"
                       : "https://servidor"
@@ -1347,13 +1357,34 @@ export function IntegrationManager({
                 ? "Guardado · vacío conserva el actual"
                 : kind === "llama_server"
                   ? "Clave de la API de llama-server"
+                  : kind === "deepseek"
+                    ? "API key de DeepSeek"
                   : kind === "telegram"
                     ? "Token del bot (de @BotFather)"
                     : "Token de lectura"
             }
           />
         </label>
-        {supported && (
+        {api_model && (
+          <>
+            <label>
+              Modelo
+              <input
+                value={model}
+                onChange={(e) => setModel(e.target.value)}
+                placeholder="deepseek-chat"
+                maxLength={120}
+              />
+            </label>
+            <p className="notice">
+              Lo que analiza el modelo sale de tu red hacia la API de
+              DeepSeek: nombres de equipos, IPs, descripciones de puertos,
+              extractos de logs y casos. Actívalo en Casos solo si la empresa
+              acepta ese envío.
+            </p>
+          </>
+        )}
+        {supported && !api_model && (
           <>
             <label>
               Redes permitidas del servidor (CIDR)

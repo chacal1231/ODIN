@@ -27,6 +27,7 @@ function duration(seconds: number) {
   return `${Math.round(seconds / 86400)} días`;
 }
 
+const providerNames: Record<string, string> = { llama_server: "modelo local", deepseek: "DeepSeek" };
 export function Cases({ api, zone, admin, focusId, onAsk }: { api: Api; zone: string; admin: boolean; focusId?: string; onAsk?: (c: ChatCase) => void }) {
   const [filter, setFilter] = useState("open");
   const [kind, setKind] = useState("");
@@ -70,8 +71,10 @@ export function Cases({ api, zone, admin, focusId, onAsk }: { api: Api; zone: st
   const [draft, setDraft] = useState<KnowledgeDraft | null>(null);
   const [knowledgeFocus, setKnowledgeFocus] = useState<string | null>(null);
   useEffect(() => { api("/analyst/status").then(setAnalyst).catch(() => setAnalyst(null)); }, [api, refresh]);
-  const toggleAnalyst = async () => {
-    try { await api("/analyst/settings", "PUT", { version: analyst.version, enabled: !analyst.enabled }); setRefresh((n) => n + 1); }
+  // One provider at a time: turning one on turns the other off.
+  const setAnalystProvider = async (provider: string, enabled: boolean) => {
+    const row = analyst.providers.find((p: any) => p.kind === provider);
+    try { await api("/analyst/settings", "PUT", { provider, version: row.version, enabled }); setRefresh((n) => n + 1); }
     catch (e) { setError((e as Error).message); }
   };
   const items = [...(data?.items || []), ...more];
@@ -87,11 +90,13 @@ export function Cases({ api, zone, admin, focusId, onAsk }: { api: Api; zone: st
       <Calibration api={api} />
       {error && <p role="alert">No se pudo actualizar: {error}</p>}
       {correlator && <p className="muted">Última pasada del correlador: {date(correlator.last_success_at)}{correlator.last_error && ` · Error: ${correlator.last_error}`} · Reglas versión {data.rule_version}</p>}
-      {analyst?.configured && <p className="muted">Analista (Qwen): {analyst.enabled ? "activo" : "desactivado"}
+      {analyst?.configured && <p className="muted">Analista ({providerNames[analyst.provider] || analyst.provider}{analyst.model ? ` · ${analyst.model}` : ""}): {analyst.enabled ? "activo" : "desactivado"}
         {analyst.enabled && analyst.last_success_at && ` · última respuesta ${date(analyst.last_success_at)}`}
         {analyst.enabled && analyst.queued > 0 && ` · ${analyst.queued} en cola`}
         {analyst.enabled && analyst.last_error && (analyst.last_failure_at || 0) > (analyst.last_success_at || 0) && ` · último error: ${analyst.last_error}`}
-        {admin && <> <button className="quiet" onClick={() => void toggleAnalyst()}>{analyst.enabled ? "Desactivar" : "Activar el analista"}</button></>}</p>}
+        {admin && <> <button className="quiet" onClick={() => void setAnalystProvider(analyst.provider, !analyst.enabled)}>{analyst.enabled ? "Desactivar" : "Activar el analista"}</button>
+          {analyst.providers.filter((p: any) => p.configured && p.kind !== analyst.provider).map((p: any) =>
+            <button key={p.kind} className="quiet" onClick={() => void setAnalystProvider(p.kind, true)}>Usar {providerNames[p.kind]}</button>)}</>}</p>}
       <div className="event-filters">
         <label>Estado<select value={filter} onChange={(e) => { setFilter(e.target.value); setSelected(null); }}>
           {filters.map(([key, label]) => <option key={key} value={key}>{label}{data?.counts && (key in states || key === "alerting") ? ` (${data.counts[key] || 0})` : ""}</option>)}
@@ -230,7 +235,7 @@ function Calibration({ api }: { api: Api }) {
           <td className="num"><strong>{d.alerts}</strong></td><td className="num">{d.quiet || "—"}</td><td className="num">{d.quiet_external || "—"}</td></tr>)}</tbody>
       </table></div>
       {!!data.noisy.length && <p className="muted">Lo que más casos genera sin avisar: {data.noisy.map((n: any) => `${n.subject} (${n.cases})`).join(", ")}.</p>}
-      <p className="muted">Análisis de Qwen: {data.reviews.analyses} hechos, {reviewed} valorados por el NOC
+      <p className="muted">Análisis de ODIN: {data.reviews.analyses} hechos, {reviewed} valorados por el NOC
         {reviewed ? ` (${data.reviews.correct || 0} correctos, ${data.reviews.partial || 0} parciales, ${data.reviews.incorrect || 0} incorrectos)` : ""}.
         Un caso se cierra tras {t.quiet_close_minutes} min estable y pasa a «sin actividad» tras {t.stale_hours} h sin cambios.</p>
     </>}

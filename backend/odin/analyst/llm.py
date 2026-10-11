@@ -1,11 +1,18 @@
-"""Client for the local llama-server (OpenAI-compatible chat completions).
+"""Clients for the analyst model: the local llama-server or a frontier model by API (DeepSeek).
 
-Token counts use the server's own template and tokenizer (/apply-template + /tokenize), so the
-budget matches what the model reads. Generation is streamed with prompt progress: every chunk
+llama-server: token counts use the server's own template and tokenizer (/apply-template + /tokenize), so
+the budget matches what the model reads. Generation is streamed with prompt progress: every chunk
 renews the job lease and checks for cancellation, and closing the stream stops the generation.
 Reasoning mode stays off: with a JSON grammar it can spend the whole budget thinking.
+
+API (OpenAI-compatible, DeepSeek by default): HTTPS to public addresses only. There is no grammar: the schema
+travels in the instructions with JSON mode, and the analyst validates every answer and its citations as it
+does for the local model. Token counts are a conservative estimate. What is sent leaves the network.
 """
+import ipaddress
 import json
+import math
+import socket
 import time
 from urllib.parse import urlsplit, urlunsplit
 import httpx
@@ -18,9 +25,16 @@ TOTAL_TIMEOUT = 900
 # Each streamed token arrives wrapped in a few hundred bytes of JSON; the answer itself is limited separately.
 MAX_STREAM = 16 * 1024 * 1024
 MAX_RESPONSE = 60000
+PROVIDERS = ('llama_server', 'deepseek')
+DEFAULT_MODEL = 'deepseek-chat'
+# Spanish text with JSON runs above 3 characters per token: counting 3 keeps the estimate on the safe side.
+CHARS_PER_TOKEN = 3
+API_CONTEXT = 64000
 
 
 class Llm:
+    CHAT_PATH = '/v1/chat/completions'
+
     def __init__(self, endpoint, secret, networks, heartbeat=lambda: None):
         if not secret:raise ConnectorError('token_missing')
         self.endpoint, self.secret, self.networks, self.heartbeat = endpoint.rstrip('/'), secret, networks, heartbeat
@@ -67,16 +81,19 @@ class Llm:
         if not isinstance(tokens, list):raise ConnectorError('invalid_response')
         return len(tokens)
 
+    def body(self, messages, schema, max_tokens, temperature):
+        return {'messages': messages, 'max_tokens': max_tokens, 'temperature': temperature, 'stream': True, 'return_progress': True,
+                'chat_template_kwargs': {'enable_thinking': False}, 'stream_options': {'include_usage': True},
+                'response_format': {'type': 'json_schema', 'json_schema': {'name': 'respuesta', 'schema': schema}}}
+
     def chat(self, messages, schema, max_tokens, progress=lambda stage, done, total: None, temperature=0.2):
         """Structured completion. Returns (content, usage, timings); raises ConnectorError on failure.
 
         `progress` is called with ('reading', processed, total) while the prompt is read and
         ('writing', tokens, max_tokens) while it writes; it may raise to abort the stream.
         """
-        body = {'messages': messages, 'max_tokens': max_tokens, 'temperature': temperature, 'stream': True, 'return_progress': True,
-                'chat_template_kwargs': {'enable_thinking': False}, 'stream_options': {'include_usage': True},
-                'response_format': {'type': 'json_schema', 'json_schema': {'name': 'respuesta', 'schema': schema}}}
-        target, headers, sni = self.url('/v1/chat/completions')
+        body = self.body(messages, schema, max_tokens, temperature)
+        target, headers, sni = self.url(self.CHAT_PATH)
         content, usage, timings, finish = [], {}, {}, None
         size, written, length, started = 0, 0, 0, time.monotonic()
         try:
@@ -115,3 +132,45 @@ class Llm:
             raise ConnectorError('connection_failed')
         if finish == 'length':raise ConnectorError('output_truncated')
         return ''.join(content), usage, timings
+
+
+class ApiLlm(Llm):
+    """A frontier model behind an OpenAI-compatible API; DeepSeek by default."""
+    CHAT_PATH = '/chat/completions'
+
+    def __init__(self, endpoint, secret, model, heartbeat=lambda: None):
+        super().__init__(endpoint, secret, [], heartbeat)
+        self.model = model or DEFAULT_MODEL
+
+    def url(self, path):
+        parsed = urlsplit(self.endpoint)
+        if parsed.scheme != 'https' or not parsed.hostname or parsed.username or parsed.password:raise ConnectorError('endpoint_invalid')
+        port = parsed.port or 443
+        try:addresses = sorted({x[4][0] for x in socket.getaddrinfo(parsed.hostname, port, type=socket.SOCK_STREAM)})
+        except OSError:raise ConnectorError('dns_or_network_invalid')
+        # A public API only: an answer pointing inside the network is refused, never followed.
+        if not addresses or any(not ipaddress.ip_address(a).is_global for a in addresses):raise ConnectorError('network_not_allowed')
+        ip = min(addresses, key=lambda a: (ipaddress.ip_address(a).version, a))
+        netloc = (f'[{ip}]' if ':' in ip else ip) + f':{port}'
+        host = parsed.hostname + (f':{parsed.port}' if parsed.port else '')
+        return urlunsplit(('https', netloc, parsed.path + path, '', '')), {'Host': host, 'Authorization': 'Bearer ' + self.secret}, parsed.hostname
+
+    def props(self):
+        return {'model': self.model, 'context': API_CONTEXT, 'slots': 0, 'build': 'api'}
+
+    def test(self):
+        models = self.call('GET', '/models').get('data')
+        if not isinstance(models, list):raise ConnectorError('invalid_response')
+        if self.model not in {m.get('id') for m in models if isinstance(m, dict)}:raise ConnectorError('model_not_found')
+        return self.props()
+
+    def count(self, messages):
+        return math.ceil(len(json.dumps(messages, ensure_ascii=False)) / CHARS_PER_TOKEN)
+
+    def body(self, messages, schema, max_tokens, temperature):
+        instruction = ('\n\nResponde solo con un objeto JSON válido que cumpla este esquema JSON, sin texto antes ni después:\n'
+                       + json.dumps(schema, ensure_ascii=False))
+        messages = [dict(m) for m in messages]
+        messages[0]['content'] += instruction
+        return {'model': self.model, 'messages': messages, 'max_tokens': max_tokens, 'temperature': temperature, 'stream': True,
+                'stream_options': {'include_usage': True}, 'response_format': {'type': 'json_object'}}

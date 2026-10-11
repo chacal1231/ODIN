@@ -73,6 +73,7 @@ class Integration(Base):
     auto_sync = Column(Boolean, nullable=False, default=False)
     events_enabled = Column(Boolean, nullable=False, default=False)
     events_timezone = Column(String(80))
+    model = Column(String(120))  # model providers by API: which model to ask for
     checked_at = Column(BigInteger)
     synced_at = Column(BigInteger)
     last_error = Column(String(80))
@@ -676,6 +677,8 @@ class TelegramState(Base):
     id = Column(String(20), primary_key=True)
     chat_id = Column(BigInteger)
     thread_id = Column(BigInteger)  # the forum topic /grupo was sent from; None posts to the group itself
+    providers_chat_id = Column(BigInteger)  # the internal group for carrier incidents, bound with /proveedores
+    providers_thread_id = Column(BigInteger)
     update_offset = Column(BigInteger, nullable=False, default=0)
     paused = Column(Boolean, nullable=False, default=False)
     heartbeat_at = Column(BigInteger)
@@ -691,6 +694,17 @@ class TelegramMessage(Base):
     analysis_id = Column(String(36))
     diagnosis_message_id = Column(BigInteger)
     recovered = Column(Boolean, nullable=False, default=False)
+    notified_at = Column(BigInteger, nullable=False)
+
+
+class TelegramProviderMessage(Base):
+    """The thread of one carrier incident in the providers group; replies to it are the follow-up notes of the case."""
+    __tablename__ = 'telegram_provider_messages'
+    case_id = Column(ForeignKey('cases.id'), primary_key=True)
+    chat_id = Column(BigInteger, nullable=False)
+    message_id = Column(BigInteger, nullable=False, index=True)
+    recovered = Column(Boolean, nullable=False, default=False)
+    closed = Column(Boolean, nullable=False, default=False)
     notified_at = Column(BigInteger, nullable=False)
 
 

@@ -19,7 +19,7 @@ from .security import (hasher, DUMMY_HASH, verify_password, token, digest, encry
 app = FastAPI(title='ODIN', version='0.1.0', docs_url=None, redoc_url=None, openapi_url=None)
 COOKIE = 'odin_session'
 CHALLENGE = 'odin_challenge'
-KINDS = ('zabbix', 'librenms', 'graylog', 'llama_server', 'telegram')
+KINDS = ('zabbix', 'librenms', 'graylog', 'llama_server', 'deepseek', 'telegram')
 
 
 @app.exception_handler(RequestValidationError)
@@ -113,6 +113,7 @@ class IntegrationBody(BaseModel):
     secret: str | None = Field(default=None, max_length=8192)
     allowed_networks: list[str] | None = Field(default=None, max_length=20)
     auto_sync: bool | None = None
+    model: str | None = Field(default=None, min_length=1, max_length=120, pattern=r'^[A-Za-z0-9._:/-]+$')
     version: int | None = None
 
     @field_validator('allowed_networks')
@@ -325,7 +326,7 @@ def deactivate(user_id: str, user: User = Depends(admin), db: Session = Depends(
 def integrations(user: User = Depends(admin), db: Session = Depends(get_db)):
     from .inventory.service import integration_view
     return [{'kind': x.kind, 'endpoint': x.endpoint, 'has_secret': bool(x.encrypted_secret),
-             'version':x.version,'allowed_networks':x.allowed_networks,'auto_sync':x.auto_sync,
+             'version':x.version,'allowed_networks':x.allowed_networks,'auto_sync':x.auto_sync,'model':x.model,
              **integration_view(x)} for x in db.scalars(select(Integration))]
 
 
@@ -333,6 +334,8 @@ def integrations(user: User = Depends(admin), db: Session = Depends(get_db)):
 def save_integration(kind: str, body: IntegrationBody, user: User = Depends(admin), db: Session = Depends(get_db)):
     if kind not in KINDS:
         raise HTTPException(404, 'Integración desconocida')
+    if kind == 'deepseek' and not body.endpoint.startswith('https://'):
+        raise HTTPException(422, 'La API del modelo requiere HTTPS')
     from .inventory.service import lock_inventory
     lock_inventory(db)
     row = db.get(Integration, kind)
@@ -355,6 +358,9 @@ def save_integration(kind: str, body: IntegrationBody, user: User = Depends(admi
         row.allowed_networks = body.allowed_networks
     if body.auto_sync is not None:
         row.auto_sync = body.auto_sync
+    if kind == 'deepseek':
+        from .analyst.llm import DEFAULT_MODEL
+        row.model = body.model or row.model or DEFAULT_MODEL
     audit(db, 'integration_saved', user.id, kind)
     db.commit()
     return {'kind': kind, 'status': 'configured_not_validated'}

@@ -9,13 +9,15 @@ from sqlalchemy.orm import Session
 from ..db import get_db, session
 from ..models import Analysis, AnalysisReview, AnalystState, Case, ChatMessage, Conversation, Integration, Knowledge, Pop, User, now
 from ..security import audit, rate_limit
-from .service import request, configured
+from .service import request, configured, ready, active
+from .llm import PROVIDERS
 from .packs import case_version
 
 
 class AnalystSettings(BaseModel):
     version: int = Field(ge=1)
     enabled: bool
+    provider: str = Field(default='llama_server', pattern='^(llama_server|deepseek)$')
 
 
 class ReviewBody(BaseModel):
@@ -113,23 +115,32 @@ def router(current, admin):
 
     @api.get('/analyst/status')
     def status(user=Depends(current), db: Session = Depends(get_db)):
-        integration = db.get(Integration, 'llama_server');row = db.get(AnalystState, 'analyst')
+        rows = {kind: db.get(Integration, kind) for kind in PROVIDERS};row = db.get(AnalystState, 'analyst')
+        current = active(db)
+        # The provider shown: the active one, else the first one ready to be turned on.
+        integration = current or next((x for x in rows.values() if ready(x)), None) or rows['llama_server']
         queued = db.scalar(select(func.count()).select_from(Analysis).where(Analysis.status == 'pending'))
         running = db.scalar(select(func.count()).select_from(Analysis).where(Analysis.status == 'running'))
-        return {'configured': bool(integration and integration.encrypted_secret and integration.allowed_networks),
-                'enabled': bool(integration and integration.events_enabled), 'version': integration.version if integration else None,
+        return {'configured': any(ready(x) for x in rows.values()), 'enabled': current is not None,
+                'provider': integration.kind if integration else 'llama_server', 'version': integration.version if integration else None,
+                'providers': [{'kind': kind, 'configured': ready(x), 'version': x.version if x else None, 'model': x.model if x else None}
+                              for kind, x in rows.items()],
                 'queued': queued, 'running': running, 'observed_at': now(),
                 **{k: getattr(row, k) if row else None for k in ('model', 'context', 'last_success_at', 'last_failure_at', 'last_error', 'heartbeat_at')}}
 
     @api.put('/analyst/settings')
     def settings(body: AnalystSettings, user=Depends(admin), db: Session = Depends(get_db)):
-        integration = db.scalar(select(Integration).where(Integration.kind == 'llama_server').with_for_update())
-        if body.enabled and (not integration or not integration.encrypted_secret):raise HTTPException(422, 'Configura URL y token de Qwen')
-        if not integration:raise HTTPException(404, 'Qwen no está configurado')
+        rows = {x.kind: x for x in db.scalars(select(Integration).where(Integration.kind.in_(PROVIDERS)).order_by(Integration.kind).with_for_update())}
+        integration = rows.get(body.provider)
+        if body.enabled and (not integration or not integration.encrypted_secret):raise HTTPException(422, 'Configura URL y token del modelo')
+        if not integration:raise HTTPException(404, 'El modelo no está configurado')
         if integration.version != body.version:raise HTTPException(409, 'Actualiza la configuración')
-        if body.enabled and not integration.allowed_networks:raise HTTPException(422, 'Faltan las redes permitidas')
+        if body.enabled and not ready(integration):raise HTTPException(422, 'Faltan las redes permitidas')
+        # One provider at a time: turning one on turns the other off.
+        for other in rows.values():
+            if other.kind != body.provider and other.events_enabled:other.events_enabled = False;other.version += 1
         integration.events_enabled = body.enabled;integration.version += 1
-        audit(db, 'analyst_enabled' if body.enabled else 'analyst_disabled', user.id, 'llama_server');db.commit()
+        audit(db, 'analyst_enabled' if body.enabled else 'analyst_disabled', user.id, body.provider);db.commit()
         return {'ok': True}
 
     @api.get('/cases/{case_id}/analyses')

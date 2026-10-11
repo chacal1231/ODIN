@@ -5,13 +5,13 @@ type Ref = { kind: string; source?: string; ids: string[]; count: number };
 
 const stages: Record<string, string> = {
   queued: "En cola", gathering: "Reuniendo evidencias", reading: "Leyendo evidencias", writing: "Redactando",
-  validating: "Validando referencias", delayed: "Demorado: Qwen no responde, se reintentará",
+  validating: "Validando referencias", delayed: "Demorado: el modelo no responde, se reintentará",
 };
 const errors: Record<string, string> = {
   analyst_not_configured: "El analista no está activado", pack_too_large: "La evidencia no cabe ni agrupada",
-  invalid_output: "Qwen no devolvió una respuesta válida", unknown_references: "Qwen citó evidencias que no existen",
-  output_truncated: "La respuesta superó el límite de longitud", connection_failed: "No se pudo conectar con Qwen",
-  llm_timeout: "Qwen no respondió a tiempo", server_unavailable: "Qwen no está disponible", access_denied: "Qwen rechazó el token",
+  invalid_output: "El modelo no devolvió una respuesta válida", unknown_references: "El modelo citó evidencias que no existen",
+  output_truncated: "La respuesta superó el límite de longitud", connection_failed: "No se pudo conectar con el modelo",
+  llm_timeout: "El modelo no respondió a tiempo", server_unavailable: "El modelo no está disponible", access_denied: "El modelo rechazó el token",
   lease_expired: "El análisis perdió su turno en la cola", cancelled: "Cancelado",
 };
 const confidence: Record<string, string> = { baja: "confianza baja", media: "confianza media", alta: "confianza alta" };
@@ -44,12 +44,12 @@ export function CaseAnalysis({ api, zone, caseId, onFocus }: {
   const latest = data.items[0];
   const running = latest && (latest.status === "pending" || latest.status === "running") ? latest : null;
   return <div className="probe-profile analysis">
-    <div className="title-row"><strong>Análisis de Qwen</strong>
+    <div className="title-row"><strong>Análisis de ODIN</strong>
       {data.available && !running && <button className="quiet" onClick={() => void act(() => api(`/cases/${caseId}/analyses`, "POST"))}>
         {latest ? "Volver a analizar" : "Analizar"}</button>}
     </div>
-    {!data.available && !latest && <p className="muted">El analista no está activado. Un administrador lo activa en Casos cuando Qwen esté configurado en Administración.</p>}
-    {data.available && !latest && <p className="muted">Qwen lee las evidencias agrupadas de este caso y separa hechos con referencias, hipótesis, datos faltantes y comprobaciones sugeridas. Tarda uno o dos minutos y no ejecuta nada sobre la red.</p>}
+    {!data.available && !latest && <p className="muted">El analista no está activado. Un administrador lo activa en Casos cuando el modelo esté configurado en Administración.</p>}
+    {data.available && !latest && <p className="muted">ODIN lee las evidencias agrupadas de este caso y separa hechos con referencias, hipótesis, datos faltantes y comprobaciones sugeridas. Tarda uno o dos minutos y no ejecuta nada sobre la red.</p>}
     {running && <p role="status">
       {stages[running.stage] || running.stage}
       {running.queue_position > 1 && ` · posición ${running.queue_position} en la cola`}

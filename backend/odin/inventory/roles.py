@@ -104,7 +104,7 @@ def summary(found):
     """What is kept on a case: enough to set its severity, relate it and explain it."""
     if not found:return None
     return {'role': found['role'], 'label': 'enlace interno' if found['remote_device_id'] else LABELS.get(found['role']),
-            'interface': found['interface'], 'device_id': found['device_id'], 'remote_device_id': found['remote_device_id'],
+            'provider': found['provider'], 'description': found['description'], 'interface': found['interface'], 'device_id': found['device_id'], 'remote_device_id': found['remote_device_id'],
             'remote_device_name': found['remote_device_name'], 'summary': describe(found)}
 
 

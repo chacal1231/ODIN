@@ -8,12 +8,12 @@ type Links = { onOpenCase: (id: string) => void; onOpenIncident: (id: string) =>
 const periods: [string, string, number][] = [["1h", "Última hora", 3600], ["6h", "Últimas 6 horas", 21600], ["24h", "Últimas 24 horas", 86400], ["7d", "Últimos 7 días", 604800]];
 const stages: Record<string, string> = {
   queued: "En cola", gathering: "Consultando casos, alertas y fuentes", reading: "Leyendo el contexto", writing: "Preparando la respuesta",
-  validating: "Comprobando referencias", delayed: "Qwen no responde; se reintentará",
+  validating: "Comprobando referencias", delayed: "El modelo no responde; se reintentará",
 };
 const errors: Record<string, string> = {
-  invalid_output: "Qwen no devolvió una respuesta válida", unknown_references: "La respuesta citaba datos que no existen y se descartó",
-  output_truncated: "La respuesta superó el límite de longitud", connection_failed: "No se pudo conectar con Qwen", llm_timeout: "Qwen no respondió a tiempo",
-  server_unavailable: "Qwen no está disponible", analyst_not_configured: "El analista no está activado", pack_too_large: "El contexto no cabe; acorta el período",
+  invalid_output: "El modelo no devolvió una respuesta válida", unknown_references: "La respuesta citaba datos que no existen y se descartó",
+  output_truncated: "La respuesta superó el límite de longitud", connection_failed: "No se pudo conectar con el modelo", llm_timeout: "El modelo no respondió a tiempo",
+  server_unavailable: "El modelo no está disponible", analyst_not_configured: "El analista no está activado", pack_too_large: "El contexto no cabe; acorta el período",
   cancelled: "Cancelada",
 };
 

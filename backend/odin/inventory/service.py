@@ -137,7 +137,7 @@ def execute(job_id,lease_token):
         if integration.version!=version:
             run.status='cancelled';run.error_code='configuration_changed';run.finished_at=now()
             job.status='done';job.lease_token=None;db.commit();return
-        endpoint,secret,networks=integration.endpoint,decrypt(integration.encrypted_secret) if integration.encrypted_secret else '',integration.allowed_networks
+        endpoint,secret,networks,model=integration.endpoint,decrypt(integration.encrypted_secret) if integration.encrypted_secret else '',integration.allowed_networks,integration.model
         run.status='running';db.commit()
     def renew():
         with session() as db:
@@ -145,7 +145,7 @@ def execute(job_id,lease_token):
                 raise ConnectorError('lease_expired')
     result=None;error=None
     try:
-        adapter=connector(source,endpoint,secret,networks,renew)
+        adapter=connector(source,endpoint,secret,networks,renew,model)
         result=adapter.test() if mode=='test' else adapter.fetch()
     except ConnectorError as exc:
         error=exc.code

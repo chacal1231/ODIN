@@ -13,7 +13,7 @@ from ..jobs import enqueue, heartbeat
 from ..models import Analysis, AnalystState, Case, Integration, Job, now, uid
 from ..security import decrypt
 from ..inventory.connectors import ConnectorError
-from .llm import Llm
+from .llm import PROVIDERS, Llm, ApiLlm
 from . import analysis as prompts
 
 KINDS = ('analyze',)
@@ -30,9 +30,21 @@ class Cancelled(Exception):
     pass
 
 
+def ready(integration):
+    """Credentials in place; the local server also needs its allowed networks (an API is reached by public address only)."""
+    return bool(integration and integration.encrypted_secret and (integration.kind == 'deepseek' or integration.allowed_networks))
+
+
+def active(db):
+    """The one model provider the administrator turned on, or None."""
+    for kind in PROVIDERS:
+        integration = db.get(Integration, kind)
+        if integration and integration.events_enabled and ready(integration):return integration
+    return None
+
+
 def configured(db):
-    integration = db.get(Integration, 'llama_server')
-    return bool(integration and integration.encrypted_secret and integration.allowed_networks and integration.events_enabled)
+    return active(db) is not None
 
 
 def request(db, kind, requested_by, case_id=None, conversation_id=None, request_info=None):
@@ -97,7 +109,7 @@ def execute(job_id, token):
         job = db.scalar(select(Job).where(Job.id == job_id).with_for_update())
         if not job or job.status != 'running' or job.lease_token != token or job.lease_until <= now():return
         row = db.get(Analysis, job.payload['analysis_id'])
-        integration = db.get(Integration, 'llama_server')
+        integration = active(db)
         if not row:
             # Its conversation was deleted by the owner.
             job.status = 'done';job.lease_token = None;job.lease_until = None;db.commit();return
@@ -107,7 +119,8 @@ def execute(job_id, token):
         if not configured(db):
             row.status = 'failed';row.error = 'analyst_not_configured';row.finished_at = now()
             job.status = 'done';job.lease_token = None;job.lease_until = None;db.commit();return
-        endpoint, secret, networks = integration.endpoint, decrypt(integration.encrypted_secret), integration.allowed_networks
+        provider, endpoint, secret, networks, model = (integration.kind, integration.endpoint, decrypt(integration.encrypted_secret),
+                                                       integration.allowed_networks, integration.model)
         row.status = 'running';row.stage = 'gathering';row.started_at = row.started_at or now();row.error = None
         analysis_id, created_at, kind = row.id, row.created_at, row.kind
         try:
@@ -134,7 +147,7 @@ def execute(job_id, token):
             row.stage = stage;row.progress = {'done': done, 'total': total};db.commit()
 
     started = time.monotonic();error = None;result = None;usage = {};props = {}
-    client = Llm(endpoint, secret, networks, renew)
+    client = ApiLlm(endpoint, secret, model, renew) if provider == 'deepseek' else Llm(endpoint, secret, networks, renew)
     try:
         props = client.props()
         count = lambda text: client.count(messages_for(text))

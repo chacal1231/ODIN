@@ -245,9 +245,12 @@ class LibreNMS:
             raise ConnectorError('invalid_response')
 
 
-def connector(kind, endpoint, secret, networks, heartbeat=lambda:None):
+def connector(kind, endpoint, secret, networks, heartbeat=lambda:None, model=None):
     if not secret:
         raise ConnectorError('token_missing')
+    if kind=='deepseek':
+        from ..analyst.llm import ApiLlm
+        return ApiLlm(endpoint,secret,model,heartbeat)
     if kind=='telegram':
         from ..telegram import Telegram
         return Telegram(endpoint,secret,networks,heartbeat)

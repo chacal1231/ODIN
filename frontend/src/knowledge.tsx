@@ -39,7 +39,7 @@ export function KnowledgePanel({ api, admin, draft, focusId, onDone }: {
     <div className="title-row"><h2>Conocimiento del NOC ({items.length})</h2>
       <span><button className="quiet" onClick={() => setOpen(!open)}>{open ? "Ocultar" : "Mostrar"}</button>
         {admin && !editing && <button className="quiet" onClick={() => { setForm(empty); setEditing(true); setOpen(true); }}>Añadir</button>}</span></div>
-    <p className="muted">Procedimientos y conclusiones validados por el NOC. El analista los usa en los casos y consultas que coinciden con su tipo y sus palabras clave. El texto de Qwen nunca se guarda aquí por sí solo.</p>
+    <p className="muted">Procedimientos y conclusiones validados por el NOC. El analista los usa en los casos y consultas que coinciden con su tipo y sus palabras clave. El texto del modelo nunca se guarda aquí por sí solo.</p>
     {open && <>
       {editing && <form className="knowledge-form" onSubmit={save}>
         <label>Título<input value={form.title} minLength={3} maxLength={200} onChange={(e) => setForm({ ...form, title: e.target.value })} required /></label>
