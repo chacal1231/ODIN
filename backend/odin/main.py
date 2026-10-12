@@ -389,24 +389,28 @@ def save_integration(kind: str, body: IntegrationBody, user: User = Depends(admi
     if not row:
         row = Integration(kind=kind)
         db.add(row)
-    row.endpoint = body.endpoint
-    if body.secret is not None:
-        row.encrypted_secret = encrypt(body.secret) if body.secret else None
-    row.updated_at = now()
-    row.version = (row.version or 0) + 1
-    row.checked_at = None
-    row.synced_at = None
-    row.last_error = None
-    if body.allowed_networks is not None:
-        row.allowed_networks = body.allowed_networks
-    if body.auto_sync is not None:
-        row.auto_sync = body.auto_sync
+    secret = row.encrypted_secret if body.secret is None else (encrypt(body.secret) if body.secret else None)
+    networks = (row.allowed_networks or []) if body.allowed_networks is None else body.allowed_networks
+    model = row.model
     if kind == 'deepseek':
         from .analyst.llm import DEFAULT_MODEL
-        row.model = body.model or row.model or DEFAULT_MODEL
+        model = body.model or row.model or DEFAULT_MODEL
+    # Only what reaches the source invalidates its last test: saving the same values must not undo a validation.
+    changed = (row.version is None or row.endpoint != body.endpoint or networks != row.allowed_networks or model != row.model
+               or (body.secret is not None and (decrypt(row.encrypted_secret) if row.encrypted_secret else '') != body.secret))
+    row.endpoint, row.encrypted_secret, row.allowed_networks, row.model = body.endpoint, secret, networks, model
+    if body.auto_sync is not None:
+        row.auto_sync = body.auto_sync
+    row.updated_at = now()
+    if changed:
+        row.version = (row.version or 0) + 1
+        row.checked_at = None
+        row.synced_at = None
+        row.last_error = None
     audit(db, 'integration_saved', user.id, kind)
     db.commit()
-    return {'kind': kind, 'status': 'configured_not_validated'}
+    from .inventory.service import integration_view
+    return {'kind': kind, 'status': integration_view(row)['status']}
 
 
 @app.get('/api/v1/admin/audit')

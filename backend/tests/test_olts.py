@@ -252,6 +252,19 @@ def test_integration_requires_a_smartolt_subdomain(client, administrator):
     assert client.post('/api/v1/admin/integrations/smartolt/test').status_code == 202
 
 
+def test_saving_the_same_values_keeps_the_validation(client, administrator):
+    enroll(client)
+    assert client.put('/api/v1/admin/integrations/smartolt', json={'endpoint': ENDPOINT, 'secret': 'k'}).status_code == 200
+    with session() as db:
+        db.get(Integration, 'smartolt').checked_at = now();db.commit()
+    # An empty token keeps the stored one; so does sending the same one.
+    for body in ({'endpoint': ENDPOINT}, {'endpoint': ENDPOINT, 'secret': 'k'}):
+        assert client.put('/api/v1/admin/integrations/smartolt', json=body).json()['status'] == 'connected'
+    with session() as db:assert db.get(Integration, 'smartolt').version == 1
+    assert client.put('/api/v1/admin/integrations/smartolt', json={'endpoint': ENDPOINT, 'secret': 'other'}).json()['status'] == 'configured_not_validated'
+    with session() as db:assert (db.get(Integration, 'smartolt').version, db.get(Integration, 'smartolt').checked_at) == (2, None)
+
+
 def test_health_reports_a_stopped_reader_and_the_budget():
     stamp = now()
     with session() as db:
