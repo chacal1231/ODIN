@@ -1,94 +1,112 @@
 # Organización del monitoreo
 
+ODIN mide por su cuenta, desde el servidor, la red propia y los servicios externos: ICMP con fping, y TCP o HTTPS con conexiones reales. Este documento explica cómo se organizan los destinos, cómo se evalúan y cómo se ajustan sus umbrales. Los servicios externos que vienen listos están en [Catálogos](catalogos.md); cómo se convierten las mediciones en casos, en [Casos y veredictos](casos-y-veredictos.md).
+
 ## Navegación
 
-El menú **Monitoreo** despliega **Red propia** y **Servicios externos**. Al entrar desde el mapa o el resumen, el grupo se abre automáticamente y señala la vista activa.
+- **Red propia**: resumen por POP, equipos y destinos, y enlaces físicos. Cada POP muestra cuántos equipos del inventario tienen un sondeo asociado. La vista de enlaces conserva puertos y VLAN, y distingue las comprobaciones directas del enlace de las de sus extremos. No infiere la salud de un enlace porque sus equipos respondan.
+- **Servicios externos**: categorías, proveedores y regiones, con búsqueda por nombre, endpoint, proveedor y región, y filtro de novedades.
+- **Incidentes**: agrupados por POP en la red propia y por destino en servicios externos. Una agrupación no confirma una causa común. Un incidente abierto no desaparece aunque se archive su comprobación.
+- **Inicio → Panorama**: atención del NOC por severidad, POPs, servicios externos afectados (con el veredicto), salud del sondeador y cambios recientes. Se actualiza cada 15 segundos.
 
-- **Red propia:** resumen por POP, equipos/destinos y enlaces físicos. Cada POP muestra cuántos equipos del inventario tienen un sondeo asociado. La vista de enlaces conserva puertos y VLAN; distingue comprobaciones directas del enlace de las de sus extremos. No infiere salud del enlace porque sus equipos respondan.
-- **Servicios externos:** categorías, proveedores y regiones. Los destinos se despliegan dentro de cada proveedor; búsqueda por nombre, endpoint, proveedor, ciudad/región y filtro de novedades. Las categorías compartidas no duplican comprobaciones.
-- **Incidentes:** agrupación operativa por POP para red propia y por destino para servicios externos, manteniendo las señales, reconocimientos y cronologías originales. Una agrupación no confirma una causa común; un incidente abierto no desaparece al archivar su comprobación.
-- **Inicio:** atención del NOC ordenada por severidad y cantidad de señales, POPs, servicios externos afectados, salud del sondeador, pendientes/sin datos/pausas y cambios recientes de incidentes. Las fuentes conservan su panel y se actualizan cada 15 segundos.
+Desde el mapa se abre el monitoreo del POP. Las asociaciones a un equipo o enlace se editan en **Organizar**.
 
-Desde el mapa se abre el monitoreo del POP seleccionado; al pulsar un enlace se abre su ficha en la vista de red. Las asociaciones a equipo o enlace se editan en **Organizar**, usando selectores con búsqueda integrada. Un equipo que cambia de POP o se concilia se sigue a través del inventario.
+## Destinos y comprobaciones
 
-## Destino y comprobaciones
+Un **destino** es lo que se vigila: un equipo, un enlace o un servicio. Puede tener varias **comprobaciones** (ICMP, TCP o HTTPS), cada una con su dirección, su perfil, su historial y sus incidentes. **Añadir comprobación** crea una nueva desactivada; el operador decide cuándo activarla.
 
-`monitoring_destinations` representa el destino lógico: nombre, ámbito, asociación opcional a equipo o enlace y versión. `probe_targets` conserva las comprobaciones existentes y añade `destination_id` y `essential`. El contrato `/targets` sigue disponible para clientes anteriores.
+- **Esenciales y opcionales.** Las comprobaciones esenciales definen el estado del destino. Las opcionales guardan métricas e incidentes, pero no cambian ese estado por sí solas. Si falla solo una parte de las esenciales, el destino queda con **afectación parcial**.
+- **Estados distintos de "normal":** pausado, mantenimiento, calentamiento (los primeros minutos de una serie nueva) y sin datos.
+- **Direcciones.** Una comprobación por IP usa direcciones autorizadas. Una por nombre DNS público resuelve en cada ronda hasta 16 IP públicas y mantiene una serie por IP. Las direcciones privadas, de loopback o de enlace local se rechazan.
+- **Mantenimientos.** Se programan por destino. Durante un mantenimiento no se abren incidentes y sus mediciones no entran en las líneas base.
+- **Límites.** Hasta 200 destinos registrados, sujetos a la capacidad del sondeador ([Configuración](configuracion.md)).
 
-Un destino admite varias comprobaciones ICMP, TCP y HTTPS. Cada una tiene dirección/familia, configuración, perfil, activación, historial e incidentes independientes. **Añadir comprobación** conserva el destino lógico y crea una comprobación desactivada; el operador decide cuándo activarla. No se generan comprobaciones adicionales automáticamente.
+ICMP a una IP de gestión mide la conectividad hasta ese equipo, no la experiencia de los clientes.
 
-Las comprobaciones esenciales determinan el estado agregado. Las opcionales conservan métricas e incidentes y muestran novedades, pero no modifican por sí solas el estado esencial. Sin esenciales, el destino queda sin comprobaciones esenciales. Pausado, mantenimiento, calentamiento y falta de datos son estados distintos de normal. Fallos en parte del grupo producen afectación parcial. El resumen de un proveedor describe los endpoints observados, no toda su infraestructura.
+## Detección
 
-La medición sale del servidor ODIN. ICMP a una dirección de gestión no mide por sí solo la experiencia del tráfico de clientes. El perfil DNS público comprueba conectividad ICMP; las transacciones DNS, métricas de interfaces, eventos de Zabbix/LibreNMS, logs, BMP y correlación causal requieren sus integraciones posteriores. Los cambios recientes de esta entrega son del monitoreo y sus incidentes, no anuncios de rutas.
+En cada ronda se evalúa una **ventana de 5 minutos**:
+
+| Condición | Por defecto |
+|---|---|
+| Pérdida (ICMP) o intentos fallidos (TCP/HTTPS) | Advertencia 5 %, crítico 20 %, recuperación por debajo de 2 % |
+| Latencia p95 | Sin umbral fijo: se ajusta por destino (umbrales adaptativos) |
+| Jitter (ICMP) | Sin umbral fijo: se ajusta por destino |
+| Sin respuesta | Crítico tras 3 rondas sin respuesta |
+
+- Hacen falta **2 evaluaciones** seguidas para abrir o escalar un incidente y **3** para recuperarlo. También hace falta un **80 % de cobertura** de la ventana.
+- La falta de datos nunca cuenta como pérdida.
+- Al abrirse y al recuperarse cada incidente, el tracer toma una traza ([Trazas de ruta](trazas-de-ruta.md)).
+
+El **jitter** es la media de la diferencia entre respuestas consecutivas dentro de una misma ronda. Un paquete perdido corta el par, y nunca se comparan rondas distintas. Requiere al menos 2 paquetes por ronda y no se evalúa en TCP/HTTPS.
 
 ## Perfiles
 
-Se conservan Estándar y Servicios TCP / HTTPS. Se añaden plantillas reutilizables:
+Un perfil es un conjunto de parámetros con versiones. Cambiar un perfil crea una versión nueva, que se aplica a sus comprobaciones de forma explícita, y los ajustes individuales se conservan. Plantillas incluidas:
 
-1. PE / infraestructura propia.
-2. Enlaces y tránsito.
-3. DNS público · conectividad ICMP.
-4. Servicios regionales.
-5. Servicios globales.
-6. Referencia internacional.
-7. Juegos · tiempo real.
+| Perfil | Medición | Uso |
+|---|---|---|
+| Estándar | ICMP, 10 paquetes cada 30 s | General |
+| PE / infraestructura propia | Igual que Estándar | Gestión de los equipos propios |
+| Enlaces y tránsito | Igual que Estándar | Otro extremo de los enlaces con proveedores |
+| DNS público · conectividad ICMP | Igual que Estándar | Resolvedores públicos |
+| Juegos · tiempo real | ICMP, 10 paquetes cada 30 s; pérdida 2 % / 10 % | Servidores de juego |
+| Servicios TCP / HTTPS | 1 intento cada 60 s, timeout de 2 s | Sitios y APIs |
+| Servicios regionales / globales / Referencia internacional | Igual que TCP / HTTPS | Servicios externos según su alcance |
 
-Las tres primeras y Juegos mantienen la base ICMP de diez paquetes cada 30 segundos; Juegos abre advertencia con 2 % de pérdida y crítico con 10 %. Las demás usan un intento cada 60 segundos y timeout de dos segundos, compatibles con TCP/HTTPS. No se asignan automáticamente ni se inventan umbrales de latencia por región.
-
-El jitter ICMP es la media de la diferencia entre respuestas consecutivas de una misma ronda; un paquete perdido corta el par y nunca se compara entre rondas. Tiene umbrales opcionales de advertencia y crítico (requiere al menos dos paquetes por ronda) y no se evalúa en TCP/HTTPS. Se fija por destino tras observar su línea base. Cambiar una plantilla crea una versión, con aplicación explícita a sus comprobaciones; los ajustes individuales se conservan.
-
-## Migración y permisos
-
-`0007_monitoring_destinations` crea un destino por comprobación existente y rellena su relación sin modificar ID, época, protocolo, configuración o habilitación. Asocia equipos propios únicamente cuando existe una coincidencia única de nombre; otras asociaciones se revisan manualmente. No agrupa automáticamente por IP, porque compartir dirección no demuestra identidad.
-
-Renombrar, cambiar ámbito/asociación o marcar una comprobación como esencial no reinicia sus series. Los cambios de medición mantienen las reglas previas de épocas y resultados obsoletos. No se permite mover una comprobación con historial a otro destino. Solo administradores modifican organización/comprobaciones; operadores consultan y mantienen sus permisos existentes sobre incidentes.
-
-Respaldar PostgreSQL antes del despliegue. Verificar migración, IDs/épocas/configuración antes/después, salud del sondeador, comprobaciones vigentes y acceso autenticado. El rollback de la migración elimina la agrupación; no borra las mediciones originales, pero pierde las asociaciones organizativas nuevas.
-
-
-## Catálogos y juegos
-
-En cada arranque, el servicio `catalogs` ejecuta `import_catalog --startup`: carga y activa, en este orden de prioridad, juegos, DNS, mensajería, social, streaming, banca/pagos, gobierno, VoIP, SaaS, search/AI y la versión resumida de hyperscalers (12 destinos). Es idempotente: conserva destinos validados, pausados o archivados y reintenta los que fallaron. Un catálogo que no se puede guardar se reporta sin detener los demás. Si la capacidad del sondeador se agota, los destinos restantes quedan sin activar con el error `probe_capacity`.
-
-`python -m odin.probes.import_catalog <archivo>` carga un catálogo revisado de cualquier categoría (salvo Red propia), crea los destinos desactivados y los valida; `--activate` activa los que pasan. Sin argumento carga `hyperscalers-v2.json`; `data/juegos-v1.json` contiene los servidores de juego observados en flujos (Akvorado) que responden a ICMP, Supercell por TCP 9339 y los routers de borde de Riot y Blizzard, cuyos servidores no responden. Un borde mide la entrada a la red del proveedor, no el servidor, y usa el perfil Estándar porque su plano de control limita ICMP. Las IP de servidores de juego rotan: revisar el catálogo con los flujos cada mes.
-
-Cada destino de catálogo guarda su ASN de referencia. Una traza que no llega al destino pero cuyo último salto con respuesta está dentro de ese ASN se marca como "Llegó a la red del destino" y se compara para detectar cambios de ruta, también durante un incidente con el destino caído.
-
-## Servicios de usuarios
-
-Los catálogos `dns`, `mensajeria`, `social`, `streaming`, `banca`, `gobierno`, `voip`, `saas` y `search-ai` (35 destinos) miden los servicios más usados por los clientes. Los DNS públicos (Cloudflare 1.1.1.1/1.0.0.1, Quad9) se miden por ICMP; WhatsApp chat (`g.whatsapp.net`), por TCP 443; el resto, por HTTPS a su sitio. Cada endpoint se verificó desde el sondeador antes de incluirlo, y cada proveedor guarda el ASN observado en ese momento como referencia para las trazas. OpenDNS quedó fuera: responde a 129 ms y pierde 5 % de forma sostenida, lo que daría alertas permanentes.
-
-BBVA, Banco de Bogotá y ChatGPT responden 403 a peticiones automáticas. Se acepta como respuesta del endpoint, pero no demuestra que el servicio funcione para el usuario. Las CDN entregan un nodo según el resolvedor del servidor ODIN; para medir el mismo nodo que reciben los clientes, el servidor debe resolver con los DNS recursivos del ISP.
+Cambiar un parámetro de **medición** (dirección, protocolo, paquetes, intervalo) reinicia la serie de la comprobación. Renombrarla, cambiar su asociación o marcarla como esencial, no.
 
 ## Umbrales adaptativos
 
-Cada comprobación aprende su comportamiento normal de su propio historial ([baseline.py](../backend/odin/probes/baseline.py)). El worker ejecuta una pasada cada hora: recalcula la línea base una vez al día con todo el historial disponible (hasta 7 días de rondas crudas), aplica los pasos automáticos y amortigua las oscilaciones.
+Cada comprobación aprende su comportamiento normal de su propio historial ([baseline.py](../backend/odin/probes/baseline.py)). El worker hace una pasada cada hora: recalcula la línea base una vez al día, con hasta 7 días de mediciones, aplica los pasos automáticos y amortigua las oscilaciones.
 
-- **Línea base:** se calcula el p95 de cada ventana de 5 minutos de todas las IP de la comprobación con su protocolo actual, sin incluir las ventanas de incidentes ni de mantenimiento. La base es la mediana; la dispersión, la desviación absoluta mediana (MAD), de modo que los picos aislados no la arrastran. También registra el jitter base, la pérdida y el p95 de la hora pico (19–23 h) frente a la madrugada (3–6 h), según `ODIN_TIMEZONE` (por defecto America/Bogota).
-- **Propuesta:** advertencia = el mayor entre base × 1,5, base + 20 ms y base + 5 MAD; crítico = el mayor entre base × 2,5, base + 50 ms y base + 10 MAD. En HTTPS: × 2 / + 50 ms y × 4 / + 150 ms, porque su tiempo incluye TLS y la respuesta. Jitter (ICMP con al menos 2 paquetes): base × 3 o + 5 ms, y × 6 o + 15 ms.
-- **Frenos:** cada umbral se mueve como máximo un 25 % respecto del aplicado, para que una degradación lenta siga alertando en vez de volverse normal. Juegos tiene un techo de 150 ms para el crítico; si la base ya lo supera se marca y no se recorta. La pérdida nunca se adapta: una base con pérdida se marca para revisión.
-- **Estados:** sin datos suficientes (menos de 24 h), provisional (menos de 7 días o cobertura inferior al 80 %) y lista.
-- **Modos por comprobación:** *Manual* usa los umbrales del perfil. *Propuesto* (el modo por defecto) calcula y muestra la propuesta, que un administrador aprueba desde el detalle o con "Aprobar todas las propuestas". *Automático* aplica la propuesta lista como máximo una vez por semana.
-- **Aplicación:** el detector superpone los umbrales aplicados a la configuración de la serie al evaluar. Aplicarlos no cambia la versión ni la época, no reinicia series ni vuelve a calentar. Los incidentes guardan los umbrales con que se abrieron.
-- **Oscilaciones:** con 4 o más incidentes de menos de 15 minutos cerrados en 24 h, la persistencia sube 2 evaluaciones (máximo 10) durante un día.
+**Línea base**
+- Es el p95 de cada ventana de 5 minutos, de todas las IP de la comprobación con su protocolo actual, sin las ventanas de incidentes ni de mantenimiento.
+- La base es la mediana de esos p95. La dispersión es su desviación absoluta mediana (MAD), así que los picos aislados no la arrastran.
+- También registra el jitter base, la pérdida y el p95 de la hora pico (19–23 h) frente a la madrugada (3–6 h), según `ODIN_TIMEZONE`. Si la diferencia entre pico y madrugada crece semana a semana, suele indicar congestión.
 
-"Recalcular líneas base" fuerza una pasada con el historial disponible en ese momento. Cada cálculo y cada aplicación quedan registrados (`probe_baselines` y auditoría); los cálculos no aplicados se conservan un año.
+**Propuesta**
 
-## Veredicto de servicios externos
+| | Advertencia | Crítico |
+|---|---|---|
+| ICMP y TCP | el mayor entre base × 1,5, base + 20 ms y base + 5 MAD | el mayor entre base × 2,5, base + 50 ms y base + 10 MAD |
+| HTTPS (incluye TLS y la respuesta) | base × 2 o + 50 ms | base × 4 o + 150 ms |
+| Jitter (ICMP) | base × 3 o + 5 ms | base × 6 o + 15 ms |
 
-[verdict.py](../backend/odin/probes/verdict.py) responde lo primero que necesita el nivel 1: ¿es nuestro, de una salida o del servicio? Cada servicio externo sale de la red por una **salida**, leída de su última traza coherente: el puerto de hand-off si el inventario lo conoce, o la primera organización después de la propia (`ODIN_ASN`, o el sistema autónomo en el que empiezan la mayoría de las trazas). Las salidas son organizaciones, no sistemas autónomos: los dos ASN de EdgeUno (7195 y 273993) son una sola salida. Si la salida es la organización del propio destino, es una interconexión directa.
+Por ejemplo, un relay de juegos con base de 38 ms queda en 58 / 95 ms, y un destino local de 1,5 ms, en 21,5 / 51,5 ms.
 
-- **Propio o del origen:** dos o más salidas con la mayoría de sus servicios degradados a la vez, o la mitad de todos los servicios (al menos 3). Acción: informar la caída propia; la atiende N2 de red.
-- **Falla en una salida:** al menos 2 servicios, y la mitad de los que salen por ella, degradados, mientras las demás salidas están bien. Acción: informar la falla y los servicios afectados; N2 la gestiona con el proveedor. Si todos los servicios de esa salida son de la misma red (Google, Meta…), se trata de esa red o de la interconexión con ella.
-- **Problema del servicio:** un servicio degrada mientras otros por su misma salida están normales. Acción: informar que el servicio falla por sí mismo; no requiere N2.
-- **Sin veredicto:** sin traza reciente (2 h), o sin otro servicio por la misma salida para comparar.
+**Frenos**
+- Cada umbral se mueve como máximo un **25 %** respecto del aplicado. Así una degradación lenta sigue alertando en vez de volverse normal.
+- Los juegos tienen un **techo** de 150 ms para el crítico. Si la base ya lo supera, se marca y no se recorta.
+- **La pérdida nunca se adapta.** Un camino sano no pierde paquetes: una base con pérdida se marca para revisión.
 
-Un cambio de ruta entre las dos últimas trazas de un servicio degradado se muestra junto al veredicto. Las trazas con respuestas mezcladas no se leen.
+**Estados de la propuesta:** *sin datos suficientes* (menos de 24 horas), *provisional* (menos de 7 días o cobertura menor al 80 %) y *lista*.
 
-El veredicto aparece en la bandeja, en el resumen de operación y en cada caso de servicio externo, y el analista lo recibe como lectura de ODIN. Decide qué casos externos alertan: alertan los de veredicto propio o de una salida, no los de un servicio que falla solo; sin veredicto se mantiene la regla de 3 servicios a la vez. Es una lectura desde un solo punto de medición, no una causa confirmada.
+**Modos por comprobación**
+- **Manual:** usa los umbrales del perfil.
+- **Propuesto** (por defecto): ODIN calcula y muestra la propuesta; un administrador la aprueba desde el detalle del destino, o todas juntas con **Aprobar todas las propuestas**.
+- **Automático:** aplica la propuesta lista como máximo una vez por semana.
 
-Las acciones están escritas para el nivel 1, que vigila e informa; el nivel 2 gestiona con los proveedores.
+**Aplicación:** el detector superpone los umbrales aplicados a la configuración de la serie al evaluar. Aplicarlos no cambia la versión ni reinicia la serie. Los incidentes guardan los umbrales con los que se abrieron.
 
-### Nombres de redes
+**Oscilaciones:** con 4 o más incidentes de menos de 15 minutos cerrados en 24 horas, la persistencia sube 2 evaluaciones (máximo 10) durante un día.
 
-Los nombres y la organización de cada sistema autónomo salen de Team Cymru por DNS (`AS<n>.asn.cymru.com`), la misma fuente que usa mtr para el origen de cada salto. El tracer consulta los que aparecen en sus trazas (hasta 10 por traza, renovados cada 30 días) y los guarda en `autonomous_systems`. La organización es la primera palabra significativa del nombre registrado, así que dos empresas distintas con la misma primera palabra se unirían; para las redes más comunes hay nombres fijos de presentación.
+**Recalcular líneas base** fuerza una pasada con el historial disponible. Cada cálculo y cada aplicación quedan registrados.
+
+## Retención
+
+| Dato | Se conserva |
+|---|---|
+| Rondas crudas (cada muestra) | 7 días |
+| Resúmenes de 5 minutos | 90 días |
+| Resúmenes por hora | 1 año |
+| Incidentes cerrados | 1 año |
+| Líneas base no aplicadas | 1 año |
+
+## Permisos
+
+Los administradores modifican destinos, comprobaciones, perfiles, organización, mantenimientos y umbrales, y lanzan pruebas manuales. Los operadores consultan, reconocen incidentes, agregan observaciones y piden trazas manuales (hasta 10 cada 5 minutos).
+
+## Notas de actualización
+
+La migración `0007_monitoring_destinations` creó un destino por cada comprobación existente sin modificar sus ID, épocas ni configuración. Asoció equipos propios solo cuando había una única coincidencia de nombre. No agrupa por IP, porque compartir una dirección no demuestra identidad.

@@ -43,7 +43,8 @@ ODIN no tiene una lista aparte de proveedores: los lee de **la descripción (ifA
 
 Con esta información, ODIN:
 - marca como críticos los casos de tránsito y transporte;
-- dice por qué enlace sale cada traza ("sale por tránsito CARRIER · PE-A Ethernet51/1");
+- dice por qué enlace sale cada traza ("sale por tránsito CARRIER · PE-A Ethernet51/1"), y usa ese enlace como **salida** en el veredicto de los servicios externos;
+- calcula el **impacto** de una interfaz caída con las OLTs que cuelgan de ella;
 - abre un hilo en el grupo de proveedores de Telegram por cada falla.
 
 ## Paso 6: destinos sugeridos
@@ -55,9 +56,17 @@ ODIN propone, sin crear nada hasta que se confirme:
 
 No sugiere lo que ya está monitoreado. Lo que se crea pasa por las mismas validaciones que cualquier comprobación (capacidad del sondeador, límite de 200 y nombres únicos), y queda activo y asociado al POP del equipo.
 
+## Comunicación del NOC
+
+El asistente cubre Telegram. El resto de la comunicación se configura en **Configuración → Comunicación NOC**: la vinculación de WhatsApp por QR y la elección del grupo, el plazo para informar, los turnos y las guías para N1 ([Comunicación del NOC](comunicacion-noc.md)).
+
 ## Después de la puesta en marcha
 
-Dejar ODIN **una semana en modo sombra**, con los avisos de casos desactivados en Casos, para revisar con la red real los umbrales y lo que ODIN asocia, antes de que avise. Ver también:
-- [Organización del monitoreo](organizacion-monitoreo.md)
-- [OLTs con SmartOLT](olts-smartolt.md)
-- [Trazas de ruta](trazas-de-ruta.md)
+Una lista para la primera semana:
+
+1. **Observar antes de publicar.** Mantener sin vincular (o en pausa) los grupos del NOC de Telegram y WhatsApp durante una semana. En **Casos**, la calibración muestra cuántos casos habría avisado cada día y cuáles son los asuntos más ruidosos.
+2. **Resolver con los DNS del ISP.** El servidor ODIN debe usar los recursivos del ISP, para que las CDN le entreguen el mismo nodo que a los clientes ([Configuración](configuracion.md)).
+3. **Revisar los catálogos** de servicios externos con los flujos del ISP, sobre todo juegos, banca y gobierno ([Catálogos](catalogos.md)).
+4. **Aprobar los umbrales adaptativos.** Desde las 24 horas aparecen propuestas provisionales y desde los 7 días, listas. Se aprueban por destino o todas juntas, y los destinos estables pueden pasar a modo automático ([Organización del monitoreo](organizacion-monitoreo.md#umbrales-adaptativos)).
+5. **Verificar la topología de acceso.** Cada OLT debe estar en LibreNMS con una dirección dentro de la subred de un puerto de router, para que el impacto de una interfaz caída cuente sus ONUs ([OLTs con SmartOLT](olts-smartolt.md)).
+6. **Ajustar las guías** para N1 a los procedimientos del ISP, y luego activar los avisos de casos, vincular o reanudar los grupos del NOC y entregar la [Guía para N1](guia-n1.md).

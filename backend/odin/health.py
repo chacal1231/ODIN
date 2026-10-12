@@ -137,8 +137,8 @@ def analyst_checks(db, stamp):
     if oldest is not None and stamp - oldest > 900:
         detail = f'Hay análisis en cola desde hace {duration(stamp - oldest)}.'
         if state.last_error and (state.last_failure_at or 0) > (state.last_success_at or 0):
-            detail += f' Último error de Qwen: {state.last_error}.'
-        return [{**check('analyst_queue', 'warning', 'Qwen no responde' if state.last_error else 'Análisis demorados', detail, 'Casos'),
+            detail += f' Último error del modelo: {state.last_error}.'
+        return [{**check('analyst_queue', 'warning', 'El modelo no responde' if state.last_error else 'Análisis demorados', detail, 'Casos'),
                  'error_code': state.last_error, 'failures': 0}]
     return []
 

@@ -1,10 +1,10 @@
 # Trazas de ruta
 
-ODIN traza la ruta hacia cada comprobación con `mtr` (10 ciclos, numérico, ASN por salto vía Team Cymru) desde el servidor ODIN. Corre en su propio servicio, `tracer`, con el mismo endurecimiento que `probe` (solo `NET_RAW`, sistema de archivos de solo lectura), para no retrasar las rondas de sondeo.
+ODIN traza la ruta hacia cada comprobación con `mtr` (10 ciclos, numérico, ASN por salto vía Team Cymru) desde el servidor ODIN. Corre en su propio servicio, `tracer`, con el mismo endurecimiento que `probe` (solo `NET_RAW`, sistema de archivos de solo lectura), para no retrasar las rondas de sondeo. Las trazas sirven para tres cosas: ver por dónde sale cada destino, detectar cambios de ruta y dar la **salida** con la que se decide el veredicto de los servicios externos ([Casos y veredictos](casos-y-veredictos.md)).
 
 ## Cuándo se traza
 
-- **Línea base** cada 15 minutos por comprobación activa. Un turno que se atrasa más de dos minutos no se recupera; si queda pendiente más de 15 minutos se cancela y lo reemplaza el siguiente.
+- **Línea base** cada 15 minutos por comprobación activa. Una traza de base que se atrasa más de dos minutos no se recupera; si queda pendiente más de 15 minutos se cancela y la reemplaza la siguiente.
 - **Apertura y recuperación de incidente**: la ruta durante la falla y después, vinculadas al incidente. Tienen prioridad sobre las líneas base.
 - **Manual**, desde la ficha del destino. Disponible para operadores y administradores, con límite de 10 cada 5 minutos por usuario.
 
@@ -22,7 +22,14 @@ Se traza siempre una dirección que la comprobación ya mide (aprobada o resuelt
 
 Sin inventario de LibreNMS los saltos propios aparecen como externos o privados.
 
-El resumen indica por qué enlace sale la ruta y la secuencia de sistemas autónomos. La huella de la ruta conserva equipos, enlaces de frontera y AS, no cada IP, de modo que el balanceo ECMP dentro de una misma red no cuenta como cambio. Se marca **Cambio de ruta** solo entre trazas que llegaron al destino.
+El resumen indica por qué enlace sale la ruta y la secuencia de sistemas autónomos. La huella de la ruta conserva equipos, enlaces de frontera y AS, no cada IP, de modo que el balanceo ECMP dentro de una misma red no cuenta como cambio. Se marca **Cambio de ruta** entre trazas comparables:
+
+- las que **llegaron al destino**, y
+- para destinos de catálogo con ASN de referencia, las que **llegaron a la red del destino**: no alcanzan el servidor (que no responde, o está caído durante un incidente), pero el último salto con respuesta está dentro del ASN del destino. Así un servidor de juego que no responde ICMP también muestra si cambió la entrada a su red.
+
+## Nombres de las redes
+
+Los ASN de cada salto se traducen a nombres y organizaciones con Team Cymru por DNS (`AS<n>.asn.cymru.com`). El tracer consulta los que aparecen en sus trazas, hasta 10 por traza, renovados cada 30 días, y los guarda en `autonomous_systems`. Una organización une los sistemas autónomos de una misma empresa (por ejemplo, EdgeUno 7195 y 273993), de modo que el veredicto los trata como una sola salida. Las rutas se muestran red por red: "Tv&Mas → EdgeUno → Netflix".
 
 ## Límites
 

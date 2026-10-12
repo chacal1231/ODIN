@@ -36,34 +36,8 @@ Si SmartOLT permite restringir la API key por IP, limitarla a la IP del servidor
 
 Si la lectura de caídas lleva más de 20 minutos sin éxito, o si la API limita las llamadas, aparece en la barra de estado.
 
-## Casos de acceso
+## Casos e impacto
 
-El correlador abre **un caso por OLT** ([access.py](../backend/odin/cases/access.py)) cuando tiene caídas de PON, un uplink caído o SmartOLT no la alcanza, y lo da por recuperado cuando no queda ninguna. Cada caída, uplink y cambio de alcance queda como evidencia con su hora; el caso muestra los PON afectados, las ONUs, las zonas y los splitters. Las caídas de más de 7 días (stale) quedan fuera: ya son conocidas.
+Con estos datos, el correlador abre **un caso de acceso por OLT**. El caso reúne sus caídas de PON, uplinks y alcance, con una lectura para el N1: OLT inalcanzable, uplink caído, corte de fibra común o en un PON, falla de energía o ONUs sin conexión. Las ONUs de SmartOLT son también la base del **impacto en clientes** de todos los casos: confirmado cuando SmartOLT reporta caídas y potencial cuando falla algo de lo que cuelgan sus OLTs. Reglas completas: [Casos y veredictos](casos-y-veredictos.md).
 
-La lectura de ODIN, escrita para el nivel 1 que vigila e informa, sigue este orden:
-
-| Situación | Lectura | Acción para N1 |
-|---|---|---|
-| SmartOLT no alcanza la OLT | La OLT, su energía o su uplink | Informar caída de la OLT; N2 revisa energía y uplink |
-| Uplink caído | Causa probable de lo que muestran sus PON | Informar; N2 revisa el enlace hacia el POP |
-| LOS en 2 o más PON que empiezan juntos (10 min) | Corte común (tramo o tarjeta) | Informar corte en las zonas; N2 despacha a campo |
-| LOS en un PON | Corte en la distribución de ese PON | Informar corte en la zona; N2 despacha a campo |
-| Falla de energía (power) | Las ONUs de los clientes perdieron energía | Informar falla eléctrica; no es la red, no requiere despacho |
-| Sin conexión (offline) | Sin causa que SmartOLT pueda identificar | Informar y vigilar |
-
-Es crítico (avisa en la barra y por Telegram) si la OLT no es alcanzable, si hay un uplink caído, si hay un corte común o si afecta a 64 ONUs o más. Los demás también aparecen en la bandeja, porque el N1 informa toda caída de acceso; el caso reemplaza a las caídas sueltas de esa OLT.
-
-Con el inventario, la OLT se asocia a su equipo, y el caso muestra como relacionados la interfaz del router que llega a ella y los casos del mismo equipo o POP, así como las alertas de Zabbix o LibreNMS y los incidentes de sondeo de su gestión. El analista recibe la lectura y los PON con sus causas.
-
-## Impacto en clientes
-
-Cada caso abierto indica a cuántos clientes afecta y dónde ([impact.py](../backend/odin/cases/impact.py)), contando ONUs de SmartOLT por OLT y zona. La OLT se ubica en la red por los enlaces del inventario que la alcanzan, es decir, los puertos de router cuya subred contiene una dirección de la OLT.
-
-| Impacto | Cuándo | Ejemplo |
-|---|---|---|
-| Confirmado | SmartOLT reporta ONUs caídas: caso de acceso, o una OLT detrás del equipo con caso de acceso abierto | "Confirmado: 300 ONUs sin servicio en OLT-NORTE, detrás de esta interfaz" |
-| Potencial | Cae una interfaz o un equipo con OLTs detrás, pero SmartOLT no reporta caídas; se indica si la OLT sigue con otro enlace | "Potencial: 512 ONUs detrás de esta interfaz (OLT-NORTE 512)" |
-| Indirecto | Una salida a internet (tránsito, IXP, peering) o una caché interna de CDN | "Indirecto: salida a internet por CARRIER" |
-| Servicio | Un servicio externo: sus usuarios; las ONUs en línea son solo referencia, porque ODIN no mide el uso por cliente | "Los clientes que usan Netflix" |
-
-Sin SmartOLT o sin inventario, el caso lo dice en lugar de estimar. La bandeja ordena por impacto dentro de cada nivel: primero lo confirmado y lo que afecta a más clientes, después lo más antiguo. El impacto también aparece en Telegram y en el detalle del caso, y el analista lo recibe como estimación de ODIN.
+Para que ODIN sepa de qué router e interfaz cuelga cada OLT, la OLT debe estar también en LibreNMS (ODIN la asocia por la IP que reporta SmartOLT) y alguna de sus direcciones debe caer dentro de la subred de un puerto de router.

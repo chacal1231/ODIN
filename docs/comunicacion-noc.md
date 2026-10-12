@@ -1,13 +1,13 @@
 # Comunicación del NOC
 
-El nivel 1 vigila e informa; el nivel 2 gestiona con los proveedores. ODIN guía al N1 en cada caso (qué verificar, qué informar, cuándo escalar), registra lo que informa y lo publica en el grupo del NOC por **Telegram** y **WhatsApp**. Se configura en **Configuración → Comunicación NOC** (solo administradores).
+El nivel 1 vigila e informa; el nivel 2 gestiona con los proveedores. ODIN guía al N1 en cada caso (qué verificar, qué informar, cuándo escalar), registra lo que informa y lo publica en el grupo del NOC por **Telegram** y **WhatsApp**. Se configura en **Configuración → Comunicación NOC** (solo administradores). Cómo lo usa el operador en el día a día: [Guía para N1](guia-n1.md).
 
 ## Canales
 
 - **Telegram**: el grupo que un administrador vincula con `/grupo` (ver README).
 - **WhatsApp**: el servicio `whatsapp` (whatsapp-web.js 1.34.7, con Chromium) se vincula escaneando el QR que muestra ODIN (WhatsApp → Dispositivos vinculados) y se elige uno de los grupos de la cuenta. La sesión se conserva en el volumen `whatsapp_data`. El servicio solo es accesible dentro de la red de Compose, con un token derivado de la clave maestra. WhatsApp Web no es una API oficial: usar un número dedicado a ODIN. Por WhatsApp solo se envía; valorar diagnósticos y consultar a ODIN se hace en ODIN o en Telegram.
 
-Por ambos canales salen los casos que alertan (en su propio hilo: el caso, su diagnóstico, el restablecimiento o una nueva caída), los informes del N1 y las entregas de turno. Lo que se envía sale de la red.
+Cada canal se pausa por separado: `/pausar` en el grupo de Telegram y **Pausar** en Comunicación NOC para WhatsApp (por ejemplo, durante la semana de observación de la puesta en marcha). Por ambos canales salen los casos que alertan (en su propio hilo: el caso, su diagnóstico, el restablecimiento o una nueva caída), los informes del N1 y las entregas de turno. Lo que se envía sale de la red.
 
 ## Tono
 

@@ -1,106 +1,141 @@
 # ODIN · Edición ISP
 
-Consola de NOC para ISPs, instalada una por operador, pensada para atender el **Nivel 1** de la operación. Integra **LibreNMS** y **Zabbix** (inventario y eventos), **Graylog** (logs de los routers), **SmartOLT** (OLTs y caídas de PON), sondeos ICMP/TCP y trazas propias hacia la red y hacia servicios externos. Con eso arma casos correlacionados, que un analista LLM (local o DeepSeek) explica citando los datos, y avisa por **Telegram** al NOC y al grupo de proveedores. La pantalla de inicio es la **bandeja de ODIN**: lo que necesita a una persona, lo que está en curso y lo resuelto en el turno.
+Consola de NOC para ISP, instalada una por operador y pensada para el **nivel 1**: quien vigila la red e informa las caídas. ODIN busca que el N1 responda en menos de un minuto tres preguntas:
 
-## Inicio local
+1. **¿Es nuestro o es de afuera?** Para servicios externos, un veredicto (problema propio, de una salida a internet o del propio servicio). Para el acceso, la lectura de cada OLT (corte de fibra, falla de energía, uplink caído o la OLT inalcanzable).
+2. **¿A quién y a cuántos afecta?** ONUs afectadas por OLT, PON y zona, confirmadas por SmartOLT o estimadas por la topología del inventario.
+3. **¿Qué hago ahora?** Una guía por situación: qué verificar, el informe para el grupo del NOC y cuándo escalar a N2.
 
-Requisitos: Docker Engine con Compose y Python 3 para generar secretos. No se necesita Node ni Python del backend instalados en el host.
+Integra **LibreNMS** y **Zabbix** (inventario y alertas), **Graylog** (logs de los routers) y **SmartOLT** (OLTs y caídas de PON). Suma sondeos ICMP/TCP/HTTPS y trazas propias hacia la red y hacia los servicios que más usan los clientes. Con eso arma casos correlacionados, que un analista LLM (local o DeepSeek) explica citando la evidencia, y los publica en el grupo del NOC por **Telegram** y **WhatsApp**.
+
+ODIN **solo lee** las fuentes: no configura equipos, no reinicia ONUs y no abre tickets.
+
+## Qué hace
+
+| Área | Qué hace | Documento |
+|---|---|---|
+| Bandeja | Lo que necesita a una persona, lo que está en curso y lo resuelto en el turno; ordenado por severidad, plazo de informe vencido e impacto | [Guía para N1](docs/guia-n1.md) |
+| Casos | Correlación determinista de sesiones BGP, interfaces, latencia y acceso (OLT/PON), con evidencia explicada, veredicto e impacto | [Casos y veredictos](docs/casos-y-veredictos.md) |
+| Monitoreo propio | Sondeos hacia equipos, enlaces con proveedores y servicios externos, con umbrales adaptativos por línea base | [Organización del monitoreo](docs/organizacion-monitoreo.md) |
+| Catálogos | Juegos, DNS, mensajería, redes sociales, streaming, banca, gobierno, VoIP, SaaS, IA y nubes, cargados al arrancar | [Catálogos](docs/catalogos.md) |
+| Trazas | mtr hacia cada destino cada 15 minutos y en cada incidente; detección de cambios de ruta y nombres de redes | [Trazas de ruta](docs/trazas-de-ruta.md) |
+| Acceso | OLTs, PON, uplinks y caídas de SmartOLT, en solo lectura | [OLTs con SmartOLT](docs/olts-smartolt.md) |
+| Comunicación | Guías para N1, informes al grupo del NOC, plazo para informar, escalamiento a N2 y entrega de turno | [Comunicación del NOC](docs/comunicacion-noc.md) |
+| Analista | Explica cada caso citando la evidencia y aprende de las valoraciones del NOC | Más abajo |
+| Autovigilancia | ODIN avisa cuando su propia cadena de datos se detiene | [Vigilancia de ODIN](docs/vigilancia-odin.md) |
+
+## Requisitos
+
+- Un servidor Linux con Docker Engine y Docker Compose, y Python 3 para generar los secretos. No hace falta instalar Node ni Python del backend en el host.
+- Orientativo para un ISP mediano: 4 vCPU, 8 GB de RAM y 50 GB de disco. El sondeador usa hasta 2 CPU y 1,5 GB; WhatsApp (Chromium), hasta 1 GB.
+- Que el servidor llegue a las fuentes del ISP (LibreNMS, Zabbix, Graylog), a internet (SmartOLT, Telegram, WhatsApp y, si se elige, DeepSeek) y a los destinos que mide.
+- **Resolver con los DNS recursivos del ISP**, no con resolvedores públicos. Así las CDN (YouTube, Netflix, TikTok) le entregan a ODIN el mismo nodo que a los clientes.
+
+Arquitectura, servicios, límites de recursos y conexiones salientes: [Arquitectura](docs/arquitectura.md).
+
+## Instalación
 
 ```bash
-bash scripts/setup-local.sh
+bash scripts/setup-local.sh          # genera .env y la clave maestra; no sobrescribe nada existente
 docker compose up --build -d
 docker compose exec api python -m odin.cli create-admin nocadmin
 ```
 
-Abrir **http://localhost:8080**. La CLI solicita una contraseña temporal sin mostrarla; el primer ingreso exige contraseña nueva de al menos 14 caracteres y registro de MFA en un autenticador TOTP: escanear el código QR o introducir la clave mostrada. Guardar los ocho códigos de recuperación antes de cerrar el aviso. No existen usuarios ni contraseñas predeterminadas.
+La CLI pide una contraseña temporal sin mostrarla. En el primer ingreso se exige una contraseña nueva de al menos 14 caracteres y el registro de MFA en un autenticador TOTP (código QR o clave), y se muestran ocho códigos de recuperación. No existen usuarios ni contraseñas predeterminadas.
 
-### Puesta en marcha
+Por defecto la web escucha solo en `127.0.0.1:8080` (`ODIN_WEB_PORT`). Desde otra máquina, entrar con un túnel SSH que conserve `localhost` como origen. Hay dos formas de publicarla:
 
-Con el administrador creado, abrir **Configuración → Puesta en marcha**. El asistente guía, en orden:
-1. conectar LibreNMS;
-2. revisar los **proveedores que ODIN detecta en las descripciones de los puertos**;
-3. sumar Zabbix, Graylog y SmartOLT;
-4. crear los **destinos de monitoreo sugeridos**: la gestión de cada equipo y el otro extremo de cada enlace con proveedores;
-5. configurar Telegram y el modelo.
-
-Cada paso prueba la conexión y muestra lo que encontró. Detalles, permisos de solo lectura recomendados y la convención de descripciones en [Puesta en marcha](docs/puesta-en-marcha.md).
-
-El puerto web solo escucha en loopback. Para acceso desde otra máquina, usar un túnel SSH que conserve `localhost:8080` como origen. Esta configuración es de desarrollo. Para publicar con HTTPS, usar `compose.public.yaml` y `deploy/Caddyfile.public` cambiando `odin.example.com` por el dominio propio; no publicar el Compose de desarrollo tal cual ni desactivar Secure para un dominio público.
-
-### Publicación WAN sin dominio
-
-Para abrir el panel por la IP pública en un puerto propio, con HTTPS y certificado de la CA interna de Caddy, definir en `.env` `ODIN_WAN_HOST` (IP pública) y `ODIN_WAN_PORT` (8090 por defecto), y opcionalmente `ODIN_WAN_ALLOW` con las redes autorizadas:
+- **Con dominio propio y puertos 80/443 libres**: `compose.public.yaml` y `deploy/Caddyfile.public`, cambiando `odin.example.com` por el dominio.
+- **Por la IP pública en un puerto propio**, con HTTPS de la CA interna de Caddy: definir en `.env` `ODIN_WAN_HOST` (IP pública), `ODIN_WAN_PORT` (8090 por defecto) y, opcionalmente, `ODIN_WAN_ALLOW` con las redes autorizadas.
 
 ```bash
 docker compose -f compose.yaml -f compose.wan.yaml up --build -d
 ```
 
-El navegador avisa del certificado la primera vez; el certificado se conserva en el volumen `caddy_wan_data`. Docker publica el puerto por encima de `ufw`: si solo se debe entrar desde el NOC, restringirlo con `ODIN_WAN_ALLOW`. Con dominio propio y puertos 80/443 libres, preferir `compose.public.yaml`.
+Para no tener que repetir los `-f` en cada comando, agregar a `.env`:
 
-## Administración
+```
+COMPOSE_FILE=compose.yaml:compose.wan.yaml
+```
 
-El administrador puede crear usuarios (contraseña temporal mostrada una vez), revocar sesiones, desactivar usuarios y guardar configuración cifrada de fuentes, desde el asistente de puesta en marcha o desde Administración. Cada fuente se prueba después de configurar sus redes permitidas; hasta entonces aparece como **sin validar**. Zabbix y LibreNMS importan inventario y eventos; Graylog y el analista LLM tienen sus lectores y controles en Eventos y Casos. El operador puede consultar el panel pero no administrar usuarios ni integraciones.
+Docker publica el puerto por encima de `ufw`: si solo se debe entrar desde el NOC, restringirlo con `ODIN_WAN_ALLOW`. No publicar el Compose de desarrollo tal cual ni desactivar `Secure` para un dominio público.
 
-### Modelo del analista
+Todas las variables de entorno, la capacidad del sondeador, las actualizaciones y los respaldos están en [Configuración](docs/configuracion.md).
 
-Dos proveedores, uno activo a la vez, que el administrador elige en **Casos**:
+## Primeros pasos
 
-- **Modelo local (llama.cpp)**: `llama-server` en la red propia, con sus redes permitidas. Los datos no salen.
-- **DeepSeek (API)**: `https://api.deepseek.com`, API key y modelo (`deepseek-chat` por defecto, o `deepseek-reasoner`). Solo HTTPS hacia direcciones públicas. **Lo que se analiza sale de la red**: nombres de equipos, IPs, descripciones de puertos, extractos de logs y casos.
+1. **Configuración → Puesta en marcha**: conectar LibreNMS, revisar los proveedores detectados en las descripciones de los puertos, sumar Zabbix, Graylog y SmartOLT, y crear los destinos sugeridos ([Puesta en marcha](docs/puesta-en-marcha.md)).
+2. **Configuración → Comunicación NOC**: ajustar el plazo para informar, los turnos y las guías, y vincular la cuenta de WhatsApp con el QR ([Comunicación del NOC](docs/comunicacion-noc.md)).
+3. **Una semana de observación** antes de publicar en el grupo del NOC: vincular Telegram y WhatsApp recién al terminarla (o tenerlos en pausa), revisar con la red real lo que ODIN asocia y aprobar los umbrales adaptativos que propone. La calibración de **Casos** muestra cuántos casos habría avisado cada día.
+4. Activar los avisos de casos, vincular o reanudar los grupos y entregar la [Guía para N1](docs/guia-n1.md) a los operadores.
 
-Con los dos, cada respuesta se valida igual: si cita evidencias que no existen, se repara una vez o se descarta.
+Los catálogos de servicios externos se cargan y activan solos al arrancar. Conviene revisarlos con los flujos del propio ISP ([Catálogos](docs/catalogos.md)).
 
-### Telegram
+## Usuarios y acceso
 
-- `/grupo` en el grupo (o tema) del NOC: casos que avisan, diagnóstico y valoración.
-- `/proveedores` en el grupo interno de proveedores: cada falla de tránsito, transporte, IXP o peering abre un hilo con qué falla, desde cuándo y cada cambio hasta su cierre. **Responder al hilo** con el ticket del proveedor, su ETA o sus novedades lo guarda como nota del caso.
-- `/pausar` y `/reanudar` detienen o reanudan ambos.
+- **Administrador**: usuarios, fuentes, organización del monitoreo, guías, WhatsApp, turnos y umbrales.
+- **Operador**: consulta todo, reconoce casos e incidentes, informa al grupo del NOC y escala a N2.
 
-Solo administradores de ODIN con la cuenta vinculada (Mi acceso → Telegram) pueden configurar los grupos.
-
-MFA permite código TOTP o código de recuperación de un solo uso. No reutilizar el mismo TOTP en dos accesos dentro del mismo intervalo. La renovación de códigos requiere contraseña y factor válido; invalida todos los anteriores. La renovación está disponible para todos los usuarios desde su nombre en la cabecera → Mi acceso. Recuperación local cuando se pierde acceso:
+MFA acepta un código TOTP o un código de recuperación de un solo uso. Los códigos se renuevan desde *Mi acceso* (con contraseña y factor válido), lo que invalida todos los anteriores. Si se pierde el acceso, la recuperación se hace desde el host:
 
 ```bash
 docker compose exec api python -m odin.cli reset-access nombre_usuario
 ```
 
-Este procedimiento requiere acceso al host, revoca sesiones/desafíos y exige nuevo registro MFA y contraseña al ingresar. No se ofrece recuperación por email. Se bloquea la desactivación de la propia cuenta y se conserva al menos un administrador activo.
+Esto revoca las sesiones, borra el MFA y exige una contraseña nueva y un registro de MFA nuevo al ingresar. No hay recuperación por email. ODIN no deja desactivar la propia cuenta y siempre conserva al menos un administrador activo.
 
-## Persistencia y configuración
+## Analista
 
-`.env` y `.secrets/` están excluidos de Git. El script no sobrescribe secretos existentes. PostgreSQL usa un volumen de Compose; `docker compose down` conserva datos. **No usar `down -v` en el entorno con datos que quieras conservar.** La clave maestra es necesaria para descifrar MFA y credenciales; se debe respaldar por separado de PostgreSQL. No rotarla reemplazando simplemente el archivo.
+Hay dos proveedores, uno activo a la vez, que el administrador elige en **Casos**:
 
-Migraciones se aplican en un proceso previo al API/worker. El backend falla si falta una clave válida o si se pretende usar cookies inseguras fuera de localhost. Las cookies son opacas, HttpOnly, SameSite=Strict y Secure según entorno. Las mutaciones exigen Origin exacto y CSRF. API no publica puerto al host ni confía en X-Forwarded-For. En E1 el límite por IP detrás del proxy es conservador y compartido; antes de publicación se debe configurar confianza explícita en el proxy para distinguir clientes sin aceptar cabeceras falsificadas.
+- **Modelo local (llama.cpp)**: `llama-server` en la red propia, con sus redes permitidas. Los datos no salen.
+- **DeepSeek (API)**: `https://api.deepseek.com`, con API key y modelo (`deepseek-chat` por defecto, o `deepseek-reasoner`). **Lo que se analiza sale de la red**: nombres de equipos, IPs, descripciones de puertos, extractos de logs y casos.
 
-Contraseñas con Argon2id, secretos con Fernet, sesiones y códigos de recuperación almacenados como hashes. Auditoría no incluye secretos. Dependencias Python fijadas en `backend/requirements.txt`; frontend con versiones exactas y `package-lock.json`.
+El analista recibe un paquete de evidencia etiquetado: logs, alertas, incidentes, trazas, caídas de PON, la lectura y el veredicto de ODIN, el impacto, las notas e informes del NOC y las correcciones de casos anteriores. Cada respuesta se valida: si cita evidencias que no existen, se repara una vez o se descarta. Las valoraciones del NOC (correcto, parcial, incorrecto, con la corrección) alimentan los análisis siguientes del mismo asunto.
 
-## Verificación
+## Telegram y WhatsApp
+
+| Comando de Telegram | Dónde | Qué hace |
+|---|---|---|
+| `/vincular <código>` | Chat privado con el bot | Vincula la cuenta de Telegram con el usuario de ODIN (código en *Mi acceso*). |
+| `/grupo` | Grupo o tema del NOC | Publica ahí los casos que avisan, su diagnóstico (con botones de valoración y reconocimiento), los informes del N1 y las entregas de turno. |
+| `/proveedores` | Grupo interno de proveedores | Un hilo por cada falla de tránsito, transporte, IXP o peering. Al responder en el hilo con el ticket o la ETA, queda como nota del caso. |
+| `/pregunta [1h\|6h\|24h\|7d] <pregunta>` | Grupo del NOC | Le pregunta al analista sobre la red. Responder al hilo de un caso pregunta sobre ese caso. |
+| `/pausar` · `/reanudar` | Grupo del NOC | Detiene o reanuda los envíos. |
+
+Solo administradores de ODIN con la cuenta vinculada configuran los grupos. **WhatsApp** se vincula escaneando un QR en ODIN y publica en un grupo de la cuenta lo mismo que el grupo del NOC de Telegram, solo de salida. Los mensajes son informes técnicos con etiqueta de estado y campos fijos. Detalles: [Comunicación del NOC](docs/comunicacion-noc.md).
+
+## Seguridad y datos
+
+- `.env` y `.secrets/` están fuera de Git. La **clave maestra** descifra MFA y credenciales, y de ella se deriva el token del servicio de WhatsApp: hay que respaldarla aparte de PostgreSQL y no rotarla con solo reemplazar el archivo.
+- Contraseñas con Argon2id, secretos con Fernet, sesiones y códigos de recuperación guardados como hash. La auditoría no incluye secretos.
+- Cookies opacas, HttpOnly, SameSite=Strict y Secure según el entorno. Las mutaciones exigen el Origin exacto y CSRF. La API no publica puerto al host y solo confía en `X-Forwarded-For` del proxy de la propia instalación.
+- Cada fuente interna (LibreNMS, Zabbix, Graylog, llama.cpp) tiene sus **redes permitidas**: ODIN no se conecta a otra dirección aunque el DNS apunte a otro lado. Los servicios públicos (SmartOLT, DeepSeek, Telegram) solo se aceptan en direcciones públicas.
+- El sondeador y el tracer corren solo con `NET_RAW`, con el sistema de archivos de solo lectura, sin red del host ni acceso a Docker.
+- ODIN guarda de las ONUs solo datos técnicos: no guarda dirección, contacto, credenciales PPPoE ni IPs de gestión.
+- Lo que se publica en Telegram, WhatsApp o DeepSeek sale de la red: nombres, direcciones y lecturas de los casos.
+
+## Persistencia, actualizaciones y pruebas
+
+PostgreSQL y la sesión de WhatsApp viven en volúmenes de Compose; `docker compose down` los conserva. **No usar `down -v` en una instalación con datos.** Las migraciones se aplican solas antes de que arranquen la API y los procesos. Antes de actualizar, respaldar PostgreSQL y la clave maestra ([Configuración](docs/configuracion.md)).
 
 ```bash
 bash scripts/test.sh
 ```
 
-Las pruebas usan **otro proyecto Compose**, PostgreSQL temporal `odin_test` sin puertos publicados; el script elimina solamente ese entorno temporal. Cubren MFA, replay, recuperación, roles, CSRF, revocación, expiración, cifrado, rate limiting y reclamación concurrente de trabajos.
-
-```bash
-docker compose build web
-docker compose ps
-docker compose logs --tail=50 api worker analyst
-```
-
-La cola admite idempotencia, lease con heartbeat, recuperación tras expiración, límite de intentos y fencing de resultados antiguos. E1 implementa un handler `healthcheck`; otros tipos fallan de forma acotada. No hay endpoints públicos para ejecutar trabajos arbitrarios.
+Las pruebas corren en **otro proyecto de Compose**, con un PostgreSQL temporal `odin_test` sin puertos publicados, y el script elimina solo ese entorno. Cubren autenticación y permisos, la cola de trabajos, el sondeo y el detector, las trazas, los catálogos, los umbrales adaptativos, los veredictos, los casos de acceso, el impacto y la comunicación del NOC.
 
 ## Documentos
 
+- [Guía para N1](docs/guia-n1.md): cómo trabaja un operador con ODIN durante el turno.
 - [Puesta en marcha](docs/puesta-en-marcha.md): el asistente paso a paso, credenciales de solo lectura y convención de descripciones de puertos.
-- [Organización del monitoreo](docs/organizacion-monitoreo.md)
-- [Catálogo de hyperscalers](docs/catalogo-hyperscalers.md)
-- [Vigilancia de ODIN](docs/vigilancia-odin.md): el sondeador, los lectores de eventos y la cola se vigilan a sí mismos y los avisos aparecen en la barra de estado.
-- [OLTs con SmartOLT](docs/olts-smartolt.md): inventario de OLTs, puertos PON, uplinks y caídas de PON, en solo lectura.
-- [Trazas de ruta](docs/trazas-de-ruta.md): mtr hacia cada destino cada 15 minutos y en cada incidente, con cada salto leído contra el inventario.
-- [Comunicación del NOC](docs/comunicacion-noc.md): guías para N1, informes al grupo del NOC por Telegram y WhatsApp, plazo para informar y entrega de turno.
+- [Arquitectura](docs/arquitectura.md): servicios, flujo de datos, recursos y conexiones salientes.
+- [Configuración](docs/configuracion.md): variables de entorno, capacidad, DNS, actualizaciones, respaldos y problemas frecuentes.
+- [Casos y veredictos](docs/casos-y-veredictos.md): reglas del correlador, veredicto de servicios externos, casos de acceso, impacto y qué avisa.
+- [Organización del monitoreo](docs/organizacion-monitoreo.md): destinos, comprobaciones, perfiles, jitter y umbrales adaptativos.
+- [Catálogos](docs/catalogos.md): los catálogos de servicios externos y cómo adaptarlos a cada ISP.
+- [Trazas de ruta](docs/trazas-de-ruta.md): mtr, cambios de ruta, nombres de redes y trazas en los casos.
+- [OLTs con SmartOLT](docs/olts-smartolt.md): inventario de OLTs, PON, uplinks y caídas, en solo lectura.
+- [Comunicación del NOC](docs/comunicacion-noc.md): guías, informes, Telegram, WhatsApp, plazo y turnos.
+- [Vigilancia de ODIN](docs/vigilancia-odin.md): cómo ODIN avisa de sus propias fallas.
 - [Identidad visual](docs/identidad-visual.md)
-
-### Organización del monitoreo
-
-El panel separa **Red propia**, **Servicios externos** e **Incidentes**. Cada destino admite varias comprobaciones con historial independiente. Consulta [Organización del monitoreo](docs/organizacion-monitoreo.md) para jerarquías, perfiles, asociaciones con el mapa y alcance de los estados agregados.
