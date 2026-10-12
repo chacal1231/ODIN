@@ -177,7 +177,7 @@ function GroupPicker({ groups, value, onChange }: { groups: Group[]; value: stri
     input.current?.focus();
   }
   return (
-    <div className="device-select"
+    <div className="device-select noc-group"
       onBlur={(e) => { if (!e.currentTarget.contains(e.relatedTarget as Node)) setOpen(false); }}>
       <label htmlFor={id}>Grupo del NOC</label>
       <div className="device-combobox">

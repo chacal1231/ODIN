@@ -1071,6 +1071,10 @@ nav button {
 }
 
 /* NOC communication: a case's reports, the shift handover text. */
+/* The group picker has no label margin under it, unlike the other fields: keep "Usar este grupo" off the input. */
+.noc-group {
+  margin-bottom: 16px;
+}
 .noc-communication {
   margin: 16px 0;
 }
