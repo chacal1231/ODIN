@@ -30,6 +30,13 @@ provisioned=$(current ODIN_PROVISIONED '')
 renew=n
 if [[ $provisioned == yes ]]; then ask renew '¿Emitir un token nuevo para ODIN? El anterior deja de servir (s/n)' n '^[sSnN]$'; fi
 
+admin_password='' generated=0
+if [[ $provisioned != yes ]]; then
+  # For the administrator created on the first run; unused if it already exists.
+  ask_password admin_password 'el usuario admin de LibreNMS'
+  generated=$SUGGESTED
+fi
+
 say 'Levantando LibreNMS'
 compose up -d
 
@@ -43,14 +50,15 @@ user_exists() {
 web_up() { [[ $(curl -s -o /dev/null -w '%{http_code}' "$URL/login") =~ ^(200|302)$ ]]; }
 wait_until 600 'a LibreNMS' web_up
 
-token='' admin_password='' generated=0
+token=''
+created_admin=0
 if [[ $provisioned != yes || $renew == [sS] ]]; then
   say 'Preparando el acceso de ODIN'
   if ! user_exists admin; then
-    ask_secret admin_password 'Contraseña para el usuario admin de LibreNMS (vacío: generar una)'
-    if [[ -z $admin_password ]]; then admin_password=$(random_password 24); generated=1; fi
+    [[ -n $admin_password ]] || { ask_password admin_password 'el usuario admin de LibreNMS'; generated=$SUGGESTED; }
     lnms user:add -r admin -p "$admin_password" admin >/dev/null
     echo 'Usuario «admin» creado.'
+    created_admin=1
     # On an empty database the image enables the web wizard; recreated on a populated one, it does not.
     compose up -d --force-recreate librenms >/dev/null 2>&1
     wait_until 600 'a LibreNMS' web_up
@@ -75,5 +83,5 @@ if [[ -n $token ]]; then echo "  Token:             $token"; echo '  (Se muestra
 else echo '  Token:             ya emitido; vuelve a ejecutar ./setup.sh para emitir uno nuevo.'; fi
 echo
 echo "Panel de LibreNMS: $URL (usuario admin)"
-if (( generated )); then echo "Contraseña de admin generada: $admin_password  (guárdala: no se vuelve a mostrar)"; fi
+if (( generated && created_admin )); then echo "Contraseña de admin (la sugerida): $admin_password  (guárdala: no se vuelve a mostrar)"; fi
 echo 'Agrega los equipos (Devices → Add Device) con la IP de gestión y SNMP; ODIN lee las descripciones de sus puertos.'

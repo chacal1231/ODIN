@@ -43,7 +43,7 @@ El script:
 - instala Docker y Compose si faltan;
 - genera la clave maestra y la contraseña de PostgreSQL;
 - pregunta el nombre del ISP, la zona horaria y cómo se publica el panel, y escribe `.env`;
-- si se le pide, construye, levanta ODIN y crea el primer administrador.
+- si se le pide, construye, levanta ODIN y crea el primer administrador con una contraseña temporal aleatoria sugerida, o con la que se escriba.
 
 Se puede volver a ejecutar para cambiar la publicación: nunca regenera los secretos, ofrece los valores actuales y conserva las demás líneas de `.env`. Sin terminal toma los valores por defecto y no levanta nada. Para hacerlo a mano:
 

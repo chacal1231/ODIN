@@ -1,6 +1,7 @@
 import argparse
 import getpass
 import re
+import sys
 from sqlalchemy import select
 from .db import session
 from .models import User
@@ -12,13 +13,19 @@ def main():
     parser.add_argument('action', choices=['create-admin', 'reset-access'])
     parser.add_argument('username')
     parser.add_argument('--mfa', action='store_true', help='create-admin: exigir 2FA (TOTP) desde el primer ingreso')
+    parser.add_argument('--password-stdin', action='store_true', help='leer la contraseña temporal de la entrada estándar')
     args = parser.parse_args()
     name = args.username.lower()
     if not re.fullmatch(r'[a-z0-9._-]{3,80}', name):
         parser.error('Nombre no válido')
-    password = getpass.getpass('Contraseña temporal (mínimo 14 caracteres): ')
-    if len(password) < 14 or len(password) > 256 or password != getpass.getpass('Repetir contraseña: '):
-        parser.error('Contraseñas inválidas o diferentes')
+    if args.password_stdin:
+        password = sys.stdin.readline().rstrip('\n')
+        if not 14 <= len(password) <= 256:
+            parser.error('La contraseña debe tener entre 14 y 256 caracteres')
+    else:
+        password = getpass.getpass('Contraseña temporal (mínimo 14 caracteres): ')
+        if len(password) < 14 or len(password) > 256 or password != getpass.getpass('Repetir contraseña: '):
+            parser.error('Contraseñas inválidas o diferentes')
     with session() as db:
         user = db.scalar(select(User).where(User.username == name).with_for_update())
         if args.action == 'create-admin':

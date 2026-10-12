@@ -103,17 +103,22 @@ start_default=n
 if (( INTERACTIVE )); then start_default=s; fi
 ask start '¿Construir y levantar ODIN ahora? (s/n)' "$start_default" '^[sSnN]$'
 if [[ $start == [sS] ]]; then
-  say 'Construyendo y levantando ODIN (la primera vez tarda varios minutos)'
-  compose up --build -d
+  # Every question before the build, so the rest runs unattended.
   admin_default=''
   if (( first_install )); then admin_default=nocadmin; fi
   ask admin 'Administrador a crear (vacío para omitir)' "$admin_default" '^([a-z0-9._-]{3,80})?$'
+  mfa_flag=()
   if [[ -n $admin ]]; then
+    ask_password admin_password "$admin (temporal: ODIN pide cambiarla en el primer ingreso)" 14
     ask admin_mfa '¿Exigirle 2FA (autenticador TOTP)? Recomendado si el panel sale por WAN o dominio (s/n)' n '^[sSnN]$'
-    mfa_flag=()
     if [[ $admin_mfa == [sS] ]]; then mfa_flag=(--mfa); fi
-    if (( INTERACTIVE )); then compose exec api python -m odin.cli create-admin "$admin" "${mfa_flag[@]}"
-    else warn "crea el administrador desde una terminal: docker compose exec api python -m odin.cli create-admin $admin"; fi
+  fi
+  say 'Construyendo y levantando ODIN (la primera vez tarda varios minutos)'
+  compose up --build -d
+  if [[ -n $admin ]]; then
+    # By stdin: the password never appears among the process arguments.
+    printf '%s\n' "$admin_password" | compose exec -T api python -m odin.cli create-admin "$admin" --password-stdin "${mfa_flag[@]}"
+    if (( SUGGESTED )); then echo "Contraseña temporal de $admin (la sugerida): $admin_password"; fi
   fi
 else
   echo

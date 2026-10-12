@@ -40,7 +40,7 @@ Cada script:
    - LibreNMS: usuario `odin` con rol *global-read*.
    - Zabbix: usuario `odin` en el grupo *ODIN lectura*, con lectura sobre todos los grupos de hosts y sin acceso a la web.
    - Graylog: usuario `odin` con rol *Reader*, el stream por defecto compartido para ver y permiso de búsqueda.
-5. **Administración:** deja la cuenta de administrador lista. LibreNMS y Graylog la crean sin pasar por el asistente web; en Zabbix se reemplaza la contraseña por defecto de `Admin`. La contraseña se puede escribir o dejar que el script la genere.
+5. **Administración:** deja la cuenta de administrador lista. LibreNMS y Graylog la crean sin pasar por el asistente web; en Zabbix se reemplaza la contraseña por defecto de `Admin`. El script sugiere una contraseña aleatoria: Enter la acepta, o se escribe otra (dos veces, sin mostrarla). Todas las preguntas se hacen antes de levantar los contenedores.
 6. **Datos para ODIN:** muestra el endpoint, la red permitida y el token para **Configuración → Puesta en marcha**.
 
 **El token se muestra una sola vez y no se guarda en el servidor.** Si se pierde, volver a ejecutar el script y pedir uno nuevo: el anterior queda revocado.

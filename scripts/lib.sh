@@ -22,23 +22,50 @@ current() {
 }
 
 # ask VAR "Pregunta" default [regex]
+# Locals carry a prefix: `printf -v` would assign a local of the same name instead of the caller's variable.
 ask() {
-  local var=$1 question=$2 default=$3 pattern=${4:-} answer
+  local _var=$1 _question=$2 _default=$3 _pattern=${4:-} _answer
   while true; do
-    answer=''
-    if (( INTERACTIVE )); then read -rp "$question${default:+ [$default]}: " answer || INTERACTIVE=0; fi
-    answer=${answer:-$default}
-    if [[ -z $pattern || $answer =~ $pattern ]]; then printf -v "$var" '%s' "$answer"; return; fi
-    (( INTERACTIVE )) || fail "valor no válido para «$question»: $answer"
+    _answer=''
+    if (( INTERACTIVE )); then read -rp "$_question${_default:+ [$_default]}: " _answer || INTERACTIVE=0; fi
+    _answer=${_answer:-$_default}
+    if [[ -z $_pattern || $_answer =~ $_pattern ]]; then printf -v "$_var" '%s' "$_answer"; return; fi
+    (( INTERACTIVE )) || fail "valor no válido para «$_question»: $_answer"
     echo '  Valor no válido.'
   done
 }
 
 # ask_secret VAR "Pregunta": hidden input; empty when there is no terminal.
 ask_secret() {
-  local answer=''
-  if (( INTERACTIVE )); then read -rsp "$2: " answer || true; echo; fi
-  printf -v "$1" '%s' "$answer"
+  local _answer=''
+  if (( INTERACTIVE )); then read -rsp "$2: " _answer || true; echo; fi
+  printf -v "$1" '%s' "$_answer"
+}
+
+# ask_password VAR "para quién" [min]: shows a random suggestion; Enter keeps it, or the person types their own twice
+# (hidden). SUGGESTED is 1 when the suggestion was kept. Without a terminal, the suggestion is used.
+ask_password() {
+  local _var=$1 _who=$2 _min=${3:-12} _password _own _again
+  _password=$(random_password 20)
+  SUGGESTED=1
+  if (( INTERACTIVE )); then
+    echo "Contraseña sugerida para $_who: $_password"
+    while true; do
+      _own=''
+      read -rsp '  Enter para usarla, o escribe otra: ' _own || true
+      echo
+      [[ -n $_own ]] || break
+      if (( ${#_own} < _min )); then echo "  Mínimo $_min caracteres."; continue; fi
+      _again=''
+      read -rsp '  Repítela: ' _again || true
+      echo
+      if [[ $_own != "$_again" ]]; then echo '  No coinciden.'; continue; fi
+      _password=$_own
+      SUGGESTED=0
+      break
+    done
+  fi
+  printf -v "$_var" '%s' "$_password"
 }
 
 # Replaces KEY's line in .env, or appends it; every other line stays as it is.

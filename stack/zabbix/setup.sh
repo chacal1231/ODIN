@@ -35,22 +35,38 @@ if [[ $provisioned == yes ]]; then
   ask renew '¿Actualizar los permisos de ODIN con los grupos de hosts nuevos y emitir un token nuevo? (s/n)' n '^[sSnN]$'
 fi
 
+admin_password='' generated=0
+if [[ $provisioned != yes ]]; then
+  # Replaces Zabbix's default password; unused if Admin already has another.
+  ask_password admin_password 'el usuario Admin de Zabbix'
+  generated=$SUGGESTED
+fi
+
 say 'Levantando Zabbix'
 compose up -d
 
 rpc() {  # rpc METHOD PARAMS_JSON [AUTH]; prints .result, fails with Zabbix's message.
   local headers=(-H 'Content-Type: application/json-rpc') reply
   if [[ -n ${3:-} ]]; then headers+=(-H "Authorization: Bearer $3"); fi
+  # Explicit returns: inside `until` and `if` conditions bash ignores set -e.
   reply=$(curl -sS "${headers[@]}" --data "$(jq -nc --arg m "$1" --argjson p "$2" '{jsonrpc: "2.0", method: $m, params: $p, id: 1}')" \
-    "$URL/api_jsonrpc.php")
+    "$URL/api_jsonrpc.php") || return 1
+  jq -e 'type == "object"' <<<"$reply" >/dev/null 2>&1 || return 1
   if jq -e '.error' <<<"$reply" >/dev/null; then jq -r '"\(.error.message) \(.error.data)"' <<<"$reply" >&2; return 1; fi
   jq -c '.result' <<<"$reply"
 }
 login() { rpc user.login "$(jq -nc --arg p "$1" '{username: "Admin", password: $p}')" | jq -r .; }
 
-wait_until 600 'a Zabbix' rpc apiinfo.version '{}'
+# The API answers before the server has created the database schema; a login attempt (right or wrong) needs both.
+schema_ready() {
+  local reply
+  reply=$(curl -sf -H 'Content-Type: application/json-rpc' \
+    --data '{"jsonrpc":"2.0","method":"user.login","params":{"username":"Admin","password":"zabbix"},"id":1}' "$URL/api_jsonrpc.php") || return 1
+  jq -e '.result or (.error.code == -32500)' <<<"$reply" >/dev/null
+}
+wait_until 600 'a Zabbix' schema_ready
 
-token='' admin_password='' generated=0
+token=''
 if [[ $provisioned != yes || $renew == [sS] ]]; then
   say 'Preparando el acceso de ODIN'
   default_password=0
@@ -89,15 +105,16 @@ if [[ $provisioned != yes || $renew == [sS] ]]; then
 
   # Last, so an interrupted run can be repeated with the default password.
   if (( default_password )); then
-    while true; do
-      ask_secret admin_password 'Contraseña nueva para Admin (vacío: generar una)'
-      if [[ -z $admin_password ]]; then admin_password=$(random_password 24); generated=1; fi
-      rpc user.update "$(jq -nc --arg p "$admin_password" '{userid: "1", current_passwd: "zabbix", passwd: $p}')" "$session" >/dev/null && break
+    [[ -n $admin_password ]] || { ask_password admin_password 'el usuario Admin de Zabbix'; generated=$SUGGESTED; }
+    until rpc user.update "$(jq -nc --arg p "$admin_password" '{userid: "1", current_passwd: "zabbix", passwd: $p}')" "$session" >/dev/null; do
       (( INTERACTIVE )) || fail 'Zabbix rechazó la contraseña nueva de Admin'
-      echo '  Zabbix rechazó esa contraseña; prueba otra.'
-      generated=0
+      echo '  Zabbix rechazó esa contraseña; elige otra.'
+      ask_password admin_password 'el usuario Admin de Zabbix'
+      generated=$SUGGESTED
     done
     echo 'Contraseña de Admin cambiada.'
+  else
+    generated=0
   fi
   set_env ODIN_PROVISIONED yes
 fi
@@ -109,6 +126,6 @@ if [[ -n $token ]]; then echo "  Token:             $token"; echo '  (Se muestra
 else echo '  Token:             ya emitido; vuelve a ejecutar ./setup.sh para emitir uno nuevo.'; fi
 echo
 echo "Panel de Zabbix: $URL (usuario Admin)"
-if (( generated )); then echo "Contraseña de Admin generada: $admin_password  (guárdala: no se vuelve a mostrar)"; fi
+if (( generated )); then echo "Contraseña de Admin (la sugerida): $admin_password  (guárdala: no se vuelve a mostrar)"; fi
 echo "Agentes activos: servidor $bind_ip, puerto $server_port."
 echo "Al crear grupos de hosts nuevos, vuelve a ejecutar ./setup.sh para que ODIN los lea."

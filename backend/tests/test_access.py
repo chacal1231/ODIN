@@ -248,3 +248,19 @@ def test_cli_admin_mfa_flag(monkeypatch):
         main()
     with session() as db:
         assert {u.username: u.mfa_required for u in db.scalars(select(User))} == {'sin2fa': False, 'con2fa': True}
+
+
+def test_cli_password_from_stdin(monkeypatch):
+    import io
+    from odin.cli import main
+    monkeypatch.setattr('sys.argv', ['odin.cli', 'create-admin', 'nocadmin', '--password-stdin'])
+    monkeypatch.setattr('sys.stdin', io.StringIO(PASSWORD + '\n'))
+    main()
+    with TestClient(app, base_url='http://localhost:8080', headers={'Origin':'http://localhost:8080'}) as client:
+        login = client.post('/api/v1/auth/login', json={'username':'nocadmin','password':PASSWORD}).json()
+        assert login['password_change_required'] and not login['mfa_required']
+    monkeypatch.setattr('sys.argv', ['odin.cli', 'create-admin', 'corta', '--password-stdin'])
+    monkeypatch.setattr('sys.stdin', io.StringIO('corta\n'))
+    import pytest
+    with pytest.raises(SystemExit):
+        main()

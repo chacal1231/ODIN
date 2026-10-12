@@ -42,9 +42,8 @@ renew=n
 if [[ $provisioned == yes ]]; then ask renew '¿Emitir un token nuevo para ODIN? El anterior deja de servir (s/n)' n '^[sSnN]$'; fi
 password=''
 if [[ -z $(current GRAYLOG_ROOT_PASSWORD_SHA2 '') ]]; then
-  ask_secret password 'Contraseña para el usuario admin de Graylog (vacío: generar una)'
-  generated=0
-  if [[ -z $password ]]; then password=$(random_password 24); generated=1; fi
+  ask_password password 'el usuario admin de Graylog'
+  generated=$SUGGESTED
   set_env GRAYLOG_ROOT_PASSWORD_SHA2 "$(printf '%s' "$password" | sha256sum | cut -d' ' -f1)"
 elif [[ $provisioned != yes || $renew == [sS] ]]; then
   ask_secret password 'Contraseña actual del usuario admin de Graylog'
@@ -136,4 +135,4 @@ else echo '  Token:             ya emitido; vuelve a ejecutar ./setup.sh para em
 echo
 echo "Configura los routers para enviar syslog a $bind_ip, puerto UDP $syslog_port."
 echo "Panel de Graylog: $URL (usuario admin)"
-if [[ ${generated:-0} == 1 ]]; then echo "Contraseña de admin generada: $password  (guárdala: no se vuelve a mostrar)"; fi
+if [[ ${generated:-0} == 1 ]]; then echo "Contraseña de admin (la sugerida): $password  (guárdala: no se vuelve a mostrar)"; fi
