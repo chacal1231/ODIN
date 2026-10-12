@@ -40,7 +40,7 @@ tracer ──► trazas, cambios de ruta, nombres de redes ──────┘
 |---|---|---|
 | `probe` | 2 CPU, 1,5 GiB, 256 procesos | Solo `NET_RAW`, raíz de solo lectura, `no-new-privileges`, `init` |
 | `tracer` | 1 CPU, 512 MiB, 64 procesos | Igual que `probe` |
-| `whatsapp` | 1 GiB, 256 procesos, `/dev/shm` de 256 MiB | Sin capacidades, `no-new-privileges`, usuario sin privilegios |
+| `whatsapp` | 3 GiB, 256 procesos, `/dev/shm` de 256 MiB | Sin capacidades, `no-new-privileges`, usuario sin privilegios |
 | `catalogs` | 512 MiB, 64 procesos | Igual que `probe` |
 
 `probe` y `tracer` corren con `init: true`: mtr y los procesos auxiliares dejan hijos que, sin un init que los recoja, se acumularían como zombis hasta agotar el límite de procesos.

@@ -24,8 +24,13 @@ function set(status, extra = {}) {
 }
 
 function start() {
+  // A recreated container has another hostname, so Chromium takes the previous one's profile locks as in use.
+  for (const lock of ['SingletonLock', 'SingletonSocket', 'SingletonCookie']) fs.rmSync(`/data/session/${lock}`, { force: true });
   client = new Client({
     authStrategy: new LocalAuth({ dataPath: '/data' }),
+    // Its default is ./.wwebjs_cache in /app, which this user cannot write: the failure came after 'authenticated'
+    // and before 'ready', silently.
+    webVersionCache: { type: 'local', path: '/data/wwebjs_cache' },
     puppeteer: { executablePath: process.env.CHROMIUM || '/usr/bin/chromium', args: ['--no-sandbox', '--disable-dev-shm-usage'] },
   });
   client.on('qr', (qr) => set('qr', { qr }));
@@ -80,8 +85,12 @@ function ready() {
 
 const routes = {
   'GET /status': async () => state,
-  'GET /groups': async () => (await ready().getChats()).filter((c) => c.isGroup)
-    .map((c) => ({ id: c.id._serialized, name: c.name, participants: (c.participants || []).length }))
+  // Read straight from WhatsApp Web's chat collection: getChats() builds a model per chat and, with this WhatsApp Web,
+  // fails on the @lid individual chats (an IndexedDB DataError surfacing as "r"), taking the whole list down.
+  'GET /groups': async () => (await ready().pupPage.evaluate(() => window.require('WAWebCollections').Chat.getModelsArray()
+    .filter((c) => c.id.server === 'g.us')
+    .map((c) => ({ id: c.id._serialized, name: c.formattedTitle || c.name || '',
+      participants: ((c.groupMetadata && c.groupMetadata.participants) || []).length }))))
     .sort((a, b) => a.name.localeCompare(b.name)),
   'POST /send': async (req) => {
     const { chat_id: chat, text, quoted } = await body(req);

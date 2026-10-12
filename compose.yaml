@@ -120,6 +120,7 @@ services:
   whatsapp:
     # The WhatsApp NOC group (whatsapp-web.js): QR pairing and sending. Only reachable inside this network,
     # with a token derived from the master key; the paired session survives restarts in its volume.
+    # The first sync after scanning loads the whole account in Chromium: with 1 GiB the tab was killed mid-sync.
     build: ./whatsapp
     volumes:
       - ./.secrets/master.key:/run/secrets/master.key:ro
@@ -127,7 +128,7 @@ services:
     cap_drop: [ALL]
     security_opt: [no-new-privileges:true]
     shm_size: 256m
-    mem_limit: 1g
+    mem_limit: 3g
     pids_limit: 256
     restart: unless-stopped
   catalogs:
