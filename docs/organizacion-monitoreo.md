@@ -76,13 +76,19 @@ Cada comprobación aprende su comportamiento normal de su propio historial ([bas
 
 ## Veredicto de servicios externos
 
-[verdict.py](../backend/odin/probes/verdict.py) responde lo primero que necesita el nivel 1: ¿es nuestro, de una salida o del servicio? Cada servicio externo sale de la red por una **salida**, leída de su última traza coherente: el puerto de hand-off si el inventario lo conoce, o el primer sistema autónomo después del propio (`ODIN_ASN`, o el que más trazas tienen al comienzo). Si la salida es la red del propio destino, es una interconexión directa.
+[verdict.py](../backend/odin/probes/verdict.py) responde lo primero que necesita el nivel 1: ¿es nuestro, de una salida o del servicio? Cada servicio externo sale de la red por una **salida**, leída de su última traza coherente: el puerto de hand-off si el inventario lo conoce, o la primera organización después de la propia (`ODIN_ASN`, o el sistema autónomo en el que empiezan la mayoría de las trazas). Las salidas son organizaciones, no sistemas autónomos: los dos ASN de EdgeUno (7195 y 273993) son una sola salida. Si la salida es la organización del propio destino, es una interconexión directa.
 
-- **Propio o del origen:** dos o más salidas con la mayoría de sus servicios degradados a la vez, o la mitad de todos los servicios (al menos 3). Acción: revisar la red propia y escalar a N2.
-- **Falla en una salida:** al menos 2 servicios, y la mitad de los que salen por ella, degradados, mientras las demás salidas están bien. Acción: ticket con ese tránsito y aviso al grupo de proveedores. Si todos los servicios de esa salida son de la misma red (Google, Meta…), se trata de esa red o de la interconexión con ella.
-- **Problema del servicio:** un servicio degrada mientras otros por su misma salida están normales. Acción: informar al cliente; no escalar.
+- **Propio o del origen:** dos o más salidas con la mayoría de sus servicios degradados a la vez, o la mitad de todos los servicios (al menos 3). Acción: informar la caída propia; la atiende N2 de red.
+- **Falla en una salida:** al menos 2 servicios, y la mitad de los que salen por ella, degradados, mientras las demás salidas están bien. Acción: informar la falla y los servicios afectados; N2 la gestiona con el proveedor. Si todos los servicios de esa salida son de la misma red (Google, Meta…), se trata de esa red o de la interconexión con ella.
+- **Problema del servicio:** un servicio degrada mientras otros por su misma salida están normales. Acción: informar que el servicio falla por sí mismo; no requiere N2.
 - **Sin veredicto:** sin traza reciente (2 h), o sin otro servicio por la misma salida para comparar.
 
 Un cambio de ruta entre las dos últimas trazas de un servicio degradado se muestra junto al veredicto. Las trazas con respuestas mezcladas no se leen.
 
 El veredicto aparece en la bandeja, en el resumen de operación y en cada caso de servicio externo, y el analista lo recibe como lectura de ODIN. Decide qué casos externos alertan: alertan los de veredicto propio o de una salida, no los de un servicio que falla solo; sin veredicto se mantiene la regla de 3 servicios a la vez. Es una lectura desde un solo punto de medición, no una causa confirmada.
+
+Las acciones están escritas para el nivel 1, que vigila e informa; el nivel 2 gestiona con los proveedores.
+
+### Nombres de redes
+
+Los nombres y la organización de cada sistema autónomo salen de Team Cymru por DNS (`AS<n>.asn.cymru.com`), la misma fuente que usa mtr para el origen de cada salto. El tracer consulta los que aparecen en sus trazas (hasta 10 por traza, renovados cada 30 días) y los guarda en `autonomous_systems`. La organización es la primera palabra significativa del nombre registrado, así que dos empresas distintas con la misma primera palabra se unirían; para las redes más comunes hay nombres fijos de presentación.

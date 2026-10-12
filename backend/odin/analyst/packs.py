@@ -13,7 +13,7 @@ from dataclasses import dataclass, field
 from sqlalchemy import select
 from ..models import (Case, CaseEvidence, CaseNote, EventCollector, Integration, User, now)
 
-SOURCES = {'graylog': 'logs', 'zabbix': 'Zabbix', 'librenms': 'LibreNMS', 'probe': 'latencia'}
+SOURCES = {'graylog': 'logs', 'zabbix': 'Zabbix', 'librenms': 'LibreNMS', 'probe': 'latencia', 'trace': 'trazas'}
 ROLES = {'trigger': 'cambio de estado', 'context': 'contexto', 'impact': 'impacto'}
 KINDS = {'bgp_session': 'sesión BGP', 'interface': 'interfaz', 'latency': 'latencia hacia'}
 NEAR = 300

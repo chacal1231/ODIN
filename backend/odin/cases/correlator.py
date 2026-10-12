@@ -10,6 +10,9 @@ Rules (version RULE_VERSION):
 - Critical: down for SUSTAINED seconds or at least FLAP_CRITICAL drops in the case, or from the first drop
   when the neighbor or the interface is a transit, a transport or an internal link between own routers
   (read from the router port descriptions, see inventory/roles.py).
+- Paths: a latency case gets the traces taken when its incidents opened and recovered and the route changes of its
+  checks in the period, before and after, network by network; a case of a router gets the route changes of checks whose
+  path crosses it (known only with the inventory).
 - Evidence links data ODIN already holds and states why it is linked. Coincidence in time alone is
   never used as evidence: every link shares the entity (equipment) or the subject (peer, interface).
   External services share no equipment with the network; their cases only list, as related, cases of
@@ -17,7 +20,7 @@ Rules (version RULE_VERSION):
 """
 import re
 from sqlalchemy import select, delete, and_, or_
-from ..models import (Case, CaseEvidence, SourceEvent, EventStream, ProbeIncident, ProbeTarget, Device,
+from ..models import (Case, CaseEvidence, SourceEvent, EventStream, ProbeIncident, ProbeTarget, ProbeTrace, Device,
                       MonitoringDestination, CorrelationState, now)
 from .entities import Resolver, Entity
 from ..inventory import roles
@@ -259,6 +262,50 @@ def latency(db, case, entity, start, end):
             for incident, name in rows]
 
 
+TRACE_MOMENTS = {'incident_opened': 'traza al abrirse el incidente', 'incident_recovered': 'traza al recuperarse el incidente'}
+
+
+def traces(db, case, entity, start, end):
+    from ..probes.asnames import lookup, route
+    from ..probes.trace import consistent
+    window_rows = select(ProbeTrace).where(ProbeTrace.status == 'done', ProbeTrace.finished_at >= start, ProbeTrace.finished_at <= end)
+    if case.kind == LATENCY:
+        incidents = select(CaseEvidence.ref).where(CaseEvidence.case_id == case.id, CaseEvidence.source == 'probe', CaseEvidence.role == 'trigger')
+        checks = select(ProbeIncident.target_id).where(ProbeIncident.id.in_(incidents))
+        rows = list(db.scalars(window_rows.where(or_(ProbeTrace.incident_id.in_(incidents),
+            and_(ProbeTrace.target_id.in_(checks), ProbeTrace.path_changed.is_(True)))).order_by(ProbeTrace.finished_at).limit(CONTEXT_CAP)))
+        role, strength = 'context', 'entity'
+    elif entity.device_id:
+        crossing = db.scalars(window_rows.where(ProbeTrace.path_changed.is_(True)).order_by(ProbeTrace.finished_at).limit(CONTEXT_CAP * 4))
+        rows = [t for t in crossing if any(h.get('device_id') == entity.device_id for h in t.hops)][:CONTEXT_CAP]
+        role, strength = 'impact', 'device'
+    else:return []
+    rows = [t for t in rows if consistent(t.hops)]
+    previous = {}
+    for t in rows:
+        if t.path_changed:
+            # The path it was compared with: the latest comparable trace before it.
+            previous[t.id] = next((p for p in db.scalars(select(ProbeTrace).where(ProbeTrace.target_id == t.target_id, ProbeTrace.address == t.address,
+                ProbeTrace.status == 'done', ProbeTrace.finished_at < t.finished_at, ProbeTrace.fingerprint.is_not(None))
+                .order_by(ProbeTrace.finished_at.desc()).limit(5)) if consistent(p.hops)), None)
+    names = lookup(db, {h.get('asn') for t in rows + [p for p in previous.values() if p] for h in t.hops})
+    targets = dict(db.execute(select(ProbeTarget.id, ProbeTarget.name).where(ProbeTarget.id.in_({t.target_id for t in rows}))).all()) if rows else {}
+    result = []
+    for t in rows:
+        now_path = route(t.hops, names, t.reached or (t.path or {}).get('network_reached'))
+        before = previous.get(t.id)
+        if t.path_changed and before:
+            title = f'{targets.get(t.target_id, t.target_id)}: cambio de ruta · antes {route(before.hops, names)} · ahora {now_path}'
+            reason = ('Cambio de ruta de un destino del caso' if case.kind == LATENCY else
+                      'Cambio de ruta de un destino cuyo camino pasa por este equipo')
+        else:
+            title = f'{targets.get(t.target_id, t.target_id)}: {TRACE_MOMENTS.get(t.reason, "traza")} · {now_path}'
+            reason = 'Traza del mismo destino en un incidente del caso'
+        result.append(evidence(case, 'trace', t.id, role, strength, reason, t.finished_at, title,
+                               {'reason': t.reason, 'reached': t.reached, 'path_changed': t.path_changed, 'address': t.address}))
+    return result
+
+
 def enrich(db, resolver, case, stamp, network):
     entity = case_entity(resolver, case)
     start, end = window(case)
@@ -269,7 +316,7 @@ def enrich(db, resolver, case, stamp, network):
         port = network.port(entity.device_id, case.subject) if entity.device_id else None
         case.detail = {**case.detail, 'port': port and {**port, 'label': roles.LABELS.get(port['role'])}}
     db.execute(delete(CaseEvidence).where(CaseEvidence.case_id == case.id, CaseEvidence.role != 'trigger'))
-    for builder in (related_logs, device_events, latency):
+    for builder in (related_logs, device_events, latency, traces):
         for item in builder(db, case, entity, start, end):
             db.add(item)
     case.enriched_at = stamp

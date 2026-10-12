@@ -38,3 +38,7 @@ Líneas base: 3 días; las que registraron cambio de ruta y las manuales, 90 dí
 ## Trazas incoherentes y concurrencia
 
 Una traza en la que la misma IP aparece en saltos no contiguos se descarta con `trace_inconsistent`: son respuestas atribuidas a otra sonda (o un bucle de enrutamiento) y compararla generaría cambios de ruta falsos. Varios mtr simultáneos en el mismo contenedor se atribuyen respuestas entre sí, con ICMP y con TCP: con 8 a la vez se mezclaba el 20 % de las trazas, y con 4 también ocurrió. Por eso `ODIN_TRACE_CONCURRENCY` vale 1: cada traza dura unos 7,5 s y una sola cola cubre unas 110 comprobaciones en cada ciclo de 15 minutos; por encima, las trazas de base atrasadas se descartan y se reemplazan por las siguientes. Subir la concurrencia vuelve a mezclar respuestas. El tracer y el sondeador corren con `init: true`: mtr deja procesos hijos que, sin un init que los recoja, se acumulan como zombis hasta agotar el límite de procesos del contenedor.
+
+## Trazas en los casos
+
+Un caso de latencia incluye como evidencia la traza tomada al abrirse y al recuperarse cada uno de sus incidentes, y cada cambio de ruta de sus destinos en el período, con el camino antes y después leído red por red (por ejemplo, "antes Tv&Mas → EdgeUno → Riot · ahora Tv&Mas → Cogent → Riot"). Un caso de BGP o de interfaz incluye, como impacto, los cambios de ruta de destinos cuyo camino pasa por ese equipo (requiere el inventario). El analista recibe estas líneas como cualquier otra evidencia. Las trazas con respuestas mezcladas no se incluyen.

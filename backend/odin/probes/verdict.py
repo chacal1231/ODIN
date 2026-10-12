@@ -1,8 +1,10 @@
 """Verdict for external services: is it ours, the exit's, or the service's? The first answer a level-1 NOC needs.
 
 Each external check leaves the network through an exit, read from its latest coherent trace: the hand-off port when
-the inventory knows it, otherwise the first autonomous system after the ISP's own (ODIN_ASN, or the one the traces
-start in). When the exit is the destination's own network (direct peering), the service and the exit are the same.
+the inventory knows it, otherwise the first organization after the ISP's own (ODIN_ASN, or the one the traces start
+in). Exits are organizations, not systems (asnames.py): EdgeUno's two systems are one exit. When the exit is the
+destination's own organization (direct peering), the service and the exit are the same.
+Actions are written for level 1, who watches and reports: level 2 deals with providers.
 Degraded services (any check in warning or critical) are then compared with the healthy ones:
 - own: degraded through several exits at once, or half of every service: the cause is before the exits (the own
   network or the probes' origin);
@@ -17,6 +19,7 @@ from sqlalchemy import select
 from ..config import settings
 from ..models import ProbeTarget, ProbeTrace, now
 from .trace import consistent
+from . import asnames
 
 RECENT = 2 * 3600
 OWN_SPREAD = 2        # exits with most of their services degraded at once
@@ -24,20 +27,20 @@ OWN_SHARE = 0.5       # or this share of every service
 EXIT_MIN = 2          # services degraded through one exit to blame it
 EXIT_SHARE = 0.5      # of the services through it
 AFFECTED = ('warning', 'critical')
-# Names for the networks seen as exits; catalog providers name the rest.
-NAMES = {7195: 'EdgeUno', 174: 'Cogent', 3356: 'Lumen', 1299: 'Arelion', 6939: 'Hurricane Electric', 3257: 'GTT', 6762: 'Sparkle',
-         12956: 'Telxius', 23520: 'Columbus Networks', 52320: 'GlobeNet', 15169: 'Google', 13335: 'Cloudflare', 32934: 'Meta',
-         20940: 'Akamai', 16625: 'Akamai', 16509: 'Amazon', 14618: 'Amazon', 8075: 'Microsoft', 6507: 'Riot', 32590: 'Valve',
-         2906: 'Netflix', 40027: 'Netflix', 19551: 'Imperva', 209242: 'Cloudflare', 54113: 'Fastly', 3549: 'Lumen', 6461: 'Zayo'}
 LABELS = {'own': 'Problema propio o del origen', 'exit': 'Falla en una salida', 'service': 'Problema del servicio',
           'undetermined': 'Sin veredicto todavía', 'normal': 'Servicios externos normales', 'origin': 'El sondeador no mide'}
 ACTIONS = {
-    'own': 'Revisar la red propia: PE de borde, enlaces de salida, DNS y la conexión del servidor ODIN. Escalar a N2 de red.',
-    'exit': 'Abrir ticket con {exit} y avisar en el grupo de proveedores. Si hay otra salida, N2 puede desviar el tráfico.',
-    'direct': 'Revisar la interconexión directa con {exit} (puerto, IXP o PNI). Si está bien, la falla es de {exit}: informar al cliente.',
-    'service': 'No es la red: informar al cliente que {service} presenta fallas. No escalar.',
+    'own': 'Informar caída propia: afecta a {services}. La atiende N2 de red (borde, enlaces de salida, DNS o el servidor ODIN).',
+    'exit': 'Informar falla en la salida {exit}: afecta a {services}. N2 la gestiona con el proveedor.',
+    'direct': 'Informar falla hacia {exit} (interconexión directa): afecta a {services}. N2 revisa la interconexión y, si está bien, '
+              'la gestiona con {exit}.',
+    'service': 'Informar que {service} presenta fallas propias: la red está bien. No requiere N2.',
     'undetermined': 'Vigilar. Si se suman servicios o llega la traza, ODIN actualiza el veredicto.',
 }
+
+
+def listing(services, limit=5):
+    return ', '.join(services[:limit]) + (f' y {len(services) - limit} más' if len(services) > limit else '')
 
 
 def own_asn(paths):
@@ -48,18 +51,20 @@ def own_asn(paths):
     return first.most_common(1)[0][0] if first else None
 
 
-def exit_of(trace, own, names):
-    """Where a path leaves the network: hand-off port, or first foreign AS after the own one."""
+def exit_of(trace, own_org, info):
+    """Where a path leaves the network: hand-off port, or first foreign organization after the own one."""
     handoff = (trace.path or {}).get('handoff')
     if handoff:
         return {'key': 'port:%s:%s' % (handoff['device_id'], handoff['interface']), 'label': handoff.get('label') or handoff['interface'],
-                'asn': None}
+                'org': None}
     started = False
     for hop in trace.hops:
         asn = hop.get('asn')
-        if asn == own:started = True
-        elif asn and (started or own is None):
-            return {'key': 'as:%d' % asn, 'label': names.get(asn) or 'AS%d' % asn, 'asn': asn}
+        if not asn:continue
+        org = info[asn]['org']
+        if org == own_org:started = True
+        elif started or own_org is None:
+            return {'key': org, 'label': info[asn]['label'], 'org': org}
     return None
 
 
@@ -89,7 +94,13 @@ def compute(db, views=None, stamp=None, origin_healthy=True):
         return {**result, 'state': 'origin', 'title': LABELS['origin'], 'action': 'Revisar la salud del sondeador antes de leer servicios externos.'}
     traces = paths(db, [c['id'] for c in checks], stamp)
     own = own_asn([t[0].hops for t in traces.values()])
-    names = {**{(c['catalog_metadata'] or {}).get('asn_reference'): c['service'] for c in checks if c['service']}, **NAMES}
+    references = {c['id']: (c['catalog_metadata'] or {}).get('asn_reference') for c in checks}
+    info = asnames.lookup(db, {h.get('asn') for t in traces.values() for row in t for h in row.hops} | set(references.values()) | {own})
+    # A network the registry has not named yet takes the name of the catalog service it hosts.
+    for c in checks:
+        asn = references[c['id']]
+        if asn and c['service'] and info[asn]['label'] == 'AS%d' % asn:info[asn]['label'] = c['service']
+    own_org = info[own]['org'] if own else None
     service_of = {c['id']: c['service'] or c['name'] for c in checks}
     exits, route_changes, degraded, healthy = {}, {}, set(), set()
     for check in checks:
@@ -98,19 +109,19 @@ def compute(db, views=None, stamp=None, origin_healthy=True):
         elif check['state'] == 'healthy':healthy.add(service)
         else:continue
         latest = traces.get(check['id'], [])
-        found = exit_of(latest[0], own, names) if latest else None
+        found = exit_of(latest[0], own_org, info) if latest else None
         if not found:continue
         row = exits.setdefault(found['key'], {**found, 'services': set(), 'degraded': set(),
                                               'direct': set()})
         row['services'].add(service)
         if check['state'] in AFFECTED:row['degraded'].add(service)
-        if found['asn'] and found['asn'] == (check['catalog_metadata'] or {}).get('asn_reference'):row['direct'].add(service)
+        if found['org'] and references[check['id']] and found['org'] == info[references[check['id']]]['org']:row['direct'].add(service)
         if len(latest) == 2 and latest[0].fingerprint != latest[1].fingerprint and check['state'] in AFFECTED:
-            before = exit_of(latest[1], own, names)
+            before = exit_of(latest[1], own_org, info)
             if before and before['key'] != found['key']:
                 route_changes[service] = {'before': before['label'], 'after': found['label'], 'at': latest[0].finished_at}
     total = degraded | healthy  # a service with one degraded check counts as degraded
-    result.update(own_asn=own, exits=sorted(({'key': k, 'label': e['label'], 'asn': e['asn'], 'services': len(e['services']),
+    result.update(own_asn=own, own_label=info[own]['label'] if own else None, exits=sorted(({'key': k, 'label': e['label'], 'services': len(e['services']),
                                               'degraded': sorted(e['degraded'])} for k, e in exits.items()), key=lambda e: -e['services']),
                   degraded=sorted(degraded), services=len(total))
     if not degraded:
@@ -121,16 +132,16 @@ def compute(db, views=None, stamp=None, origin_healthy=True):
         findings.append({'state': 'own', 'services': sorted(degraded), 'exits': sorted(e['label'] for e in bad.values()),
                          'title': f'{LABELS["own"]}: {len(degraded)} de {len(total)} servicios degradados'
                                   + (f' por {len(bad)} salidas distintas' if len(bad) >= OWN_SPREAD else ''),
-                         'action': ACTIONS['own']})
+                         'action': ACTIONS['own'].format(services=listing(sorted(degraded)))})
         explained = set(degraded)
     else:
         for e in bad.values():
             # Every service through it is the exit's own network: a direct interconnection, so it is that provider or the link to it.
             direct = e['direct'] == e['services']
-            findings.append({'state': 'exit', 'exit': e['label'], 'asn': e['asn'], 'direct': direct, 'services': sorted(e['degraded']),
+            findings.append({'state': 'exit', 'exit': e['label'], 'direct': direct, 'services': sorted(e['degraded']),
                              'title': f'{LABELS["exit"]}: {len(e["degraded"])} de {len(e["services"])} servicios que salen por {e["label"]}'
                                       + (' (interconexión directa)' if direct else '') + ' están degradados',
-                             'action': ACTIONS['direct' if direct else 'exit'].format(exit=e['label'])})
+                             'action': ACTIONS['direct' if direct else 'exit'].format(exit=e['label'], services=listing(sorted(e['degraded'])))})
             explained |= e['degraded']
     for service in sorted(degraded - explained):
         through = [e for e in exits.values() if service in e['services']]

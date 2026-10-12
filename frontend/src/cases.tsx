@@ -18,7 +18,7 @@ const role = (c: any) => {
 const down = (c: any) => c.kind === "latency" ? (c.last_state === "down" ? "degradado" : "normal") : (c.last_state === "down" ? "caída" : "restablecida");
 const states: Record<string, string> = { active: "Activo", stale: "Sin actividad", closed: "Cerrado" };
 const filters: [string, string][] = [["alerting", "Avisan en la barra"], ["open", "Abiertos"], ["active", "Activos"], ["stale", "Sin actividad"], ["closed", "Cerrados"], ["all", "Todos"]];
-const sources: Record<string, string> = { graylog: "Logs", zabbix: "Zabbix", librenms: "LibreNMS", probe: "Latencia" };
+const sources: Record<string, string> = { graylog: "Logs", zabbix: "Zabbix", librenms: "LibreNMS", probe: "Latencia", trace: "Traza" };
 const roles: Record<string, string> = { trigger: "Cambio de estado", context: "Contexto", impact: "Impacto" };
 const strengths: Record<string, string> = { entity: "Mismo vecino o interfaz", device: "Mismo equipo", time: "Solo coincidencia temporal" };
 

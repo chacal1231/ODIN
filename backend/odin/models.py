@@ -283,6 +283,17 @@ class ProbeBaseline(Base):
     __table_args__ = (Index('ix_probe_baselines_target', 'target_id', 'computed_at'),)
 
 
+class AutonomousSystem(Base):
+    """Registered name of an autonomous system and the organization it belongs to (probes/asnames.py)."""
+    __tablename__ = 'autonomous_systems'
+    asn = Column(BigInteger, primary_key=True)
+    name = Column(String(300))
+    org = Column(String(80))
+    display = Column(String(120))
+    country = Column(String(4))
+    resolved_at = Column(BigInteger, nullable=False)
+
+
 class ProbeBatch(Base):
     __tablename__ = 'probe_batches'
     id = Column(String(36), primary_key=True, default=uid)

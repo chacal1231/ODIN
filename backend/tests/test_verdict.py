@@ -50,7 +50,7 @@ def test_degradation_concentrated_on_one_exit_blames_it():
         assert result['own_asn'] == OWN and result['state'] == 'exit'
         assert result['findings'][0]['exit'] == 'EdgeUno' and result['findings'][0]['services'] == ['Netflix', 'Valve']
         assert result['title'] == 'Falla en una salida: 2 de 3 servicios que salen por EdgeUno están degradados'
-        assert 'Abrir ticket con EdgeUno' in result['action']
+        assert result['action'] == 'Informar falla en la salida EdgeUno: afecta a Netflix, Valve. N2 la gestiona con el proveedor.'
 
 
 def test_one_service_failing_through_a_healthy_exit_is_the_service():
@@ -62,7 +62,7 @@ def test_one_service_failing_through_a_healthy_exit_is_the_service():
         result = lab.run()
         assert result['state'] == 'service' and result['findings'][0]['service'] == 'Netflix'
         assert '2 servicios más por la misma salida (EdgeUno) están normales' in result['title']
-        assert result['action'].startswith('No es la red')
+        assert result['action'] == 'Informar que Netflix presenta fallas propias: la red está bien. No requiere N2.'
 
 
 def test_several_exits_at_once_is_our_own_network():
@@ -96,7 +96,7 @@ def test_direct_interconnection_and_undetermined_and_route_change():
         result = lab.run()
         states = {f.get('exit') or f.get('service'): f for f in result['findings']}
         assert states['Google']['state'] == 'exit' and states['Google']['direct']
-        assert 'Revisar la interconexión directa con Google' in states['Google']['action']
+        assert states['Google']['action'].startswith('Informar falla hacia Google (interconexión directa): afecta a Gmail, YouTube.')
         assert states['Nequi']['state'] == 'undetermined' and 'sin traza' in states['Nequi']['title']
         assert states['Cogent']['state'] == 'service' and states['Cogent']['route_changes']['Riot']['before'] == 'EdgeUno'
 
@@ -117,3 +117,17 @@ def test_external_case_alerts_by_verdict():
     assert group(case('exit'), 1) == group(case('own'), 1) == 'external'
     assert group(case('service'), 5) is None
     assert group(case(None), 3) == 'external' and group(case('undetermined'), 2) is None
+
+
+def test_two_systems_of_one_organization_are_one_exit():
+    with session() as db:
+        lab = Lab(db)
+        # EdgeUno answers from AS7195 on some paths and AS273993 on others.
+        lab.check('A', 'Netflix', 'critical', hops(273993, 2906), 2906)
+        lab.check('B', 'Valve', 'critical', hops(7195, 32590), 32590)
+        lab.check('C', 'Spotify', 'healthy', hops(7195, 54113), 54113)
+        lab.check('D', 'Teams', 'healthy', hops(174, 8075), 8075)
+        lab.check('E', 'Zoom', 'healthy', hops(174, 209242), 209242)
+        result = lab.run()
+        assert result['state'] == 'exit' and result['findings'][0]['exit'] == 'EdgeUno'
+        assert [e['services'] for e in result['exits'] if e['label'] == 'EdgeUno'] == [3]

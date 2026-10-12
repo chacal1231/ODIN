@@ -32,6 +32,7 @@ from ..models import ProbeTarget, ProbeTrace, ProbeOrigin, SourceIdentity, Devic
 from ..inventory import roles
 from .config import safe_ip
 from .resolver import ProbeError
+from . import asnames
 
 INTERVAL = 900
 CYCLES = 10
@@ -248,6 +249,11 @@ def execute(task):
             row.path_changed = None if previous is None else previous != row.fingerprint
         row.status = 'done'
         db.commit()
+        # Names of the networks crossed, for paths and verdicts people read; never blocks a trace result.
+        try:
+            asnames.refresh(db, {h['asn'] for h in row.hops if h.get('asn')});db.commit()
+        except Exception:
+            db.rollback();logging.warning('asn_names_failed')
 
 
 def heartbeat(error, value):
