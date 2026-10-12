@@ -17,8 +17,9 @@ class Settings(BaseSettings):
     isp_name: str = ''
     probe_concurrency: int = 32
     probe_max_addresses: int = 384
-    # More simultaneous mtr runs mixed replies between traces (20 % of traces with 8, none with 4).
-    trace_concurrency: int = 4
+    # mtr runs sharing a network namespace credit each other's replies: traces run one at a time (~7.5 s each,
+    # about 110 checks per 15-minute baseline cycle).
+    trace_concurrency: int = 1
     # Local time for the evening peak of adaptive baselines.
     timezone: str = 'America/Bogota'
     idle_seconds: int = 1800
