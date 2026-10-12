@@ -93,7 +93,9 @@ def test_startup_activates_games_validates_hyperscalers_and_preserves_pauses(mon
     assert import_catalog.startup()==0
     with session() as db:
         assert not db.get(ProbeTarget,paused.id).enabled
-        assert db.scalar(select(func.count()).select_from(ProbeTarget))==33
+        # Every startup catalog is stored and active; names never collide across catalogs.
+        assert db.scalar(select(func.count()).select_from(ProbeTarget))==68
+        assert db.scalar(select(func.count()).select_from(ProbeTarget).where(ProbeTarget.enabled.is_(True)))==67
     # A catalog that cannot be stored is reported without stopping the next one.
     monkeypatch.setattr(import_catalog,'STARTUP',[('missing.json',True),('juegos-v1.json',True)])
     assert import_catalog.startup()==1

@@ -24,7 +24,8 @@ ICMP_VERSIONS={'juegos':GAMES_VERSION_ID}
 DATA=Path(__file__).parent/'data'
 # Loaded and activated on every start, in priority order under the capacity budget. Hyperscalers v2 keeps only the
 # regions the ISP's traffic reaches (Bogotá, US East/South, México, São Paulo); v1 stays as the full reference.
-STARTUP=[('juegos-v1.json',True),('hyperscalers-v2.json',True)]
+STARTUP=[(name,True) for name in ('juegos-v1.json','dns-v1.json','mensajeria-v1.json','social-v1.json','streaming-v1.json',
+    'banca-v1.json','gobierno-v1.json','voip-v1.json','saas-v1.json','search-ai-v1.json','hyperscalers-v2.json')]
 DESCRIPTIONS={'border':'Router de borde del proveedor, no el servidor: responde ICMP desde su plano de control y puede limitarlo. '
                        'Sirve para seguir la entrada a su red cuando los servidores no responden.'}
 

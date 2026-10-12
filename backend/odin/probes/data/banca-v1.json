@@ -1,0 +1,104 @@
+{
+  "category": "BANCA/PAGOS",
+  "version": 1,
+  "providers": [
+    {
+      "provider": "PSE",
+      "asn": 25773,
+      "service": "PSE",
+      "targets": [
+        {
+          "name": "PSE-WEB",
+          "target": "www.pse.com.co",
+          "protocol": "https",
+          "port": 443,
+          "scope": "edge"
+        }
+      ]
+    },
+    {
+      "provider": "BANCOLOMBIA",
+      "asn": 19551,
+      "service": "Bancolombia",
+      "targets": [
+        {
+          "name": "BANCOLOMBIA-WEB",
+          "target": "www.bancolombia.com",
+          "protocol": "https",
+          "port": 443,
+          "scope": "edge"
+        }
+      ]
+    },
+    {
+      "provider": "NEQUI",
+      "asn": 209242,
+      "service": "Nequi",
+      "targets": [
+        {
+          "name": "NEQUI-WEB",
+          "target": "www.nequi.com.co",
+          "protocol": "https",
+          "port": 443,
+          "scope": "edge"
+        }
+      ]
+    },
+    {
+      "provider": "DAVIVIENDA",
+      "asn": 19551,
+      "service": "Davivienda",
+      "targets": [
+        {
+          "name": "DAVIVIENDA-WEB",
+          "target": "www.davivienda.com",
+          "protocol": "https",
+          "port": 443,
+          "scope": "edge"
+        }
+      ]
+    },
+    {
+      "provider": "DAVIPLATA",
+      "asn": 19551,
+      "service": "Daviplata",
+      "targets": [
+        {
+          "name": "DAVIPLATA-WEB",
+          "target": "www.daviplata.com",
+          "protocol": "https",
+          "port": 443,
+          "scope": "edge"
+        }
+      ]
+    },
+    {
+      "provider": "BBVA",
+      "asn": 16625,
+      "service": "BBVA",
+      "targets": [
+        {
+          "name": "BBVA-WEB",
+          "target": "www.bbva.com.co",
+          "protocol": "https",
+          "port": 443,
+          "scope": "edge"
+        }
+      ]
+    },
+    {
+      "provider": "BANCO-BOGOTA",
+      "asn": 16509,
+      "service": "Banco de Bogotá",
+      "targets": [
+        {
+          "name": "BANCO-BOGOTA-WEB",
+          "target": "www.bancodebogota.com",
+          "protocol": "https",
+          "port": 443,
+          "scope": "edge"
+        }
+      ]
+    }
+  ]
+}

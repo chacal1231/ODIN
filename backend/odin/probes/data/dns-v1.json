@@ -1,0 +1,38 @@
+{
+  "category": "DNS",
+  "version": 1,
+  "providers": [
+    {
+      "provider": "CLOUDFLARE",
+      "asn": 13335,
+      "service": "Cloudflare",
+      "targets": [
+        {
+          "name": "CLOUDFLARE-DNS-1",
+          "target": "1.1.1.1",
+          "protocol": "icmp",
+          "scope": "anycast"
+        },
+        {
+          "name": "CLOUDFLARE-DNS-2",
+          "target": "1.0.0.1",
+          "protocol": "icmp",
+          "scope": "anycast"
+        }
+      ]
+    },
+    {
+      "provider": "QUAD9",
+      "asn": 19281,
+      "service": "Quad9",
+      "targets": [
+        {
+          "name": "QUAD9-DNS",
+          "target": "9.9.9.9",
+          "protocol": "icmp",
+          "scope": "anycast"
+        }
+      ]
+    }
+  ]
+}

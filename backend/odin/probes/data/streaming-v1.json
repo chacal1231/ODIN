@@ -1,0 +1,112 @@
+{
+  "category": "STREAMING",
+  "version": 1,
+  "providers": [
+    {
+      "provider": "YOUTUBE",
+      "asn": 15169,
+      "service": "YouTube",
+      "targets": [
+        {
+          "name": "YOUTUBE-WEB",
+          "target": "www.youtube.com",
+          "protocol": "https",
+          "port": 443,
+          "scope": "edge"
+        }
+      ]
+    },
+    {
+      "provider": "NETFLIX",
+      "asn": 2906,
+      "service": "Netflix",
+      "targets": [
+        {
+          "name": "NETFLIX-WEB",
+          "target": "www.netflix.com",
+          "protocol": "https",
+          "port": 443,
+          "scope": "edge"
+        },
+        {
+          "name": "NETFLIX-FAST",
+          "target": "fast.com",
+          "protocol": "https",
+          "port": 443,
+          "scope": "edge",
+          "asn": 16625
+        }
+      ]
+    },
+    {
+      "provider": "DISNEY",
+      "asn": 16625,
+      "service": "Disney+",
+      "targets": [
+        {
+          "name": "DISNEY-WEB",
+          "target": "www.disneyplus.com",
+          "protocol": "https",
+          "port": 443,
+          "scope": "edge"
+        }
+      ]
+    },
+    {
+      "provider": "PRIME",
+      "asn": 16509,
+      "service": "Prime Video",
+      "targets": [
+        {
+          "name": "PRIME-VIDEO-WEB",
+          "target": "www.primevideo.com",
+          "protocol": "https",
+          "port": 443,
+          "scope": "edge"
+        }
+      ]
+    },
+    {
+      "provider": "HBOMAX",
+      "asn": 20940,
+      "service": "HBO Max",
+      "targets": [
+        {
+          "name": "HBOMAX-WEB",
+          "target": "www.hbomax.com",
+          "protocol": "https",
+          "port": 443,
+          "scope": "edge"
+        }
+      ]
+    },
+    {
+      "provider": "TWITCH",
+      "asn": 54113,
+      "service": "Twitch",
+      "targets": [
+        {
+          "name": "TWITCH-WEB",
+          "target": "www.twitch.tv",
+          "protocol": "https",
+          "port": 443,
+          "scope": "edge"
+        }
+      ]
+    },
+    {
+      "provider": "SPOTIFY",
+      "asn": 54113,
+      "service": "Spotify",
+      "targets": [
+        {
+          "name": "SPOTIFY-WEB",
+          "target": "open.spotify.com",
+          "protocol": "https",
+          "port": 443,
+          "scope": "edge"
+        }
+      ]
+    }
+  ]
+}

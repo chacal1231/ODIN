@@ -1,0 +1,62 @@
+{
+  "category": "VOIP/RTC",
+  "version": 1,
+  "providers": [
+    {
+      "provider": "TEAMS",
+      "asn": 8075,
+      "service": "Teams",
+      "targets": [
+        {
+          "name": "TEAMS-WEB",
+          "target": "teams.microsoft.com",
+          "protocol": "https",
+          "port": 443,
+          "scope": "edge"
+        }
+      ]
+    },
+    {
+      "provider": "ZOOM",
+      "asn": 209242,
+      "service": "Zoom",
+      "targets": [
+        {
+          "name": "ZOOM-WEB",
+          "target": "zoom.us",
+          "protocol": "https",
+          "port": 443,
+          "scope": "edge"
+        }
+      ]
+    },
+    {
+      "provider": "MEET",
+      "asn": 15169,
+      "service": "Google Meet",
+      "targets": [
+        {
+          "name": "MEET-WEB",
+          "target": "meet.google.com",
+          "protocol": "https",
+          "port": 443,
+          "scope": "edge"
+        }
+      ]
+    },
+    {
+      "provider": "DISCORD",
+      "asn": 13335,
+      "service": "Discord",
+      "targets": [
+        {
+          "name": "DISCORD-WEB",
+          "target": "discord.com",
+          "protocol": "https",
+          "port": 443,
+          "scope": "edge"
+        }
+      ]
+    }
+  ]
+}

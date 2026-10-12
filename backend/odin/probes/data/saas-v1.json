@@ -1,0 +1,34 @@
+{
+  "category": "SAAS",
+  "version": 1,
+  "providers": [
+    {
+      "provider": "MICROSOFT365",
+      "asn": 8075,
+      "service": "Microsoft 365",
+      "targets": [
+        {
+          "name": "OUTLOOK-365",
+          "target": "outlook.office365.com",
+          "protocol": "https",
+          "port": 443,
+          "scope": "edge"
+        }
+      ]
+    },
+    {
+      "provider": "WORKSPACE",
+      "asn": 15169,
+      "service": "Google Workspace",
+      "targets": [
+        {
+          "name": "GMAIL-WEB",
+          "target": "mail.google.com",
+          "protocol": "https",
+          "port": 443,
+          "scope": "edge"
+        }
+      ]
+    }
+  ]
+}

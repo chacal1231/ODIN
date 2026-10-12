@@ -1,0 +1,48 @@
+{
+  "category": "SEARCH/AI",
+  "version": 1,
+  "providers": [
+    {
+      "provider": "OPENAI",
+      "asn": 13335,
+      "service": "ChatGPT",
+      "targets": [
+        {
+          "name": "CHATGPT-WEB",
+          "target": "chatgpt.com",
+          "protocol": "https",
+          "port": 443,
+          "scope": "edge"
+        }
+      ]
+    },
+    {
+      "provider": "GEMINI",
+      "asn": 15169,
+      "service": "Gemini",
+      "targets": [
+        {
+          "name": "GEMINI-WEB",
+          "target": "gemini.google.com",
+          "protocol": "https",
+          "port": 443,
+          "scope": "edge"
+        }
+      ]
+    },
+    {
+      "provider": "ANTHROPIC",
+      "asn": 399358,
+      "service": "Claude",
+      "targets": [
+        {
+          "name": "CLAUDE-WEB",
+          "target": "claude.ai",
+          "protocol": "https",
+          "port": 443,
+          "scope": "edge"
+        }
+      ]
+    }
+  ]
+}

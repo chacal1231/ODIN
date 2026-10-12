@@ -1,0 +1,27 @@
+{
+  "category": "MENSAJERÍA",
+  "version": 1,
+  "providers": [
+    {
+      "provider": "WHATSAPP",
+      "asn": 32934,
+      "service": "WhatsApp",
+      "targets": [
+        {
+          "name": "WHATSAPP-WEB",
+          "target": "web.whatsapp.com",
+          "protocol": "https",
+          "port": 443,
+          "scope": "edge"
+        },
+        {
+          "name": "WHATSAPP-CHAT",
+          "target": "g.whatsapp.net",
+          "protocol": "tcp",
+          "port": 443,
+          "scope": "edge"
+        }
+      ]
+    }
+  ]
+}

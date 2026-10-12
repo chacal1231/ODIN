@@ -1,0 +1,41 @@
+{
+  "category": "GOBIERNO",
+  "version": 1,
+  "providers": [
+    {
+      "provider": "DIAN",
+      "asn": 269954,
+      "service": "DIAN",
+      "targets": [
+        {
+          "name": "DIAN-WEB",
+          "target": "www.dian.gov.co",
+          "protocol": "https",
+          "port": 443,
+          "scope": "edge"
+        },
+        {
+          "name": "DIAN-MUISCA",
+          "target": "muisca.dian.gov.co",
+          "protocol": "https",
+          "port": 443,
+          "scope": "edge"
+        }
+      ]
+    },
+    {
+      "provider": "GOVCO",
+      "asn": 16509,
+      "service": "GOV.CO",
+      "targets": [
+        {
+          "name": "GOVCO-WEB",
+          "target": "www.gov.co",
+          "protocol": "https",
+          "port": 443,
+          "scope": "edge"
+        }
+      ]
+    }
+  ]
+}

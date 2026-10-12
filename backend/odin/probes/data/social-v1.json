@@ -1,0 +1,48 @@
+{
+  "category": "SOCIAL",
+  "version": 1,
+  "providers": [
+    {
+      "provider": "FACEBOOK",
+      "asn": 32934,
+      "service": "Meta/Facebook",
+      "targets": [
+        {
+          "name": "FACEBOOK-WEB",
+          "target": "www.facebook.com",
+          "protocol": "https",
+          "port": 443,
+          "scope": "edge"
+        }
+      ]
+    },
+    {
+      "provider": "INSTAGRAM",
+      "asn": 32934,
+      "service": "Instagram",
+      "targets": [
+        {
+          "name": "INSTAGRAM-WEB",
+          "target": "www.instagram.com",
+          "protocol": "https",
+          "port": 443,
+          "scope": "edge"
+        }
+      ]
+    },
+    {
+      "provider": "TIKTOK",
+      "asn": 20940,
+      "service": "TikTok",
+      "targets": [
+        {
+          "name": "TIKTOK-WEB",
+          "target": "www.tiktok.com",
+          "protocol": "https",
+          "port": 443,
+          "scope": "edge"
+        }
+      ]
+    }
+  ]
+}
