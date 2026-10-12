@@ -1,4 +1,4 @@
-odin.example.com {
+{$ODIN_DOMAIN} {
     header {
         X-Content-Type-Options nosniff
         X-Frame-Options DENY

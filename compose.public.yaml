@@ -1,31 +1,30 @@
+# Own domain with ports 80/443: Caddy obtains the certificate for ODIN_DOMAIN from Let's Encrypt.
+# docker compose -f compose.yaml -f compose.public.yaml up --build -d
 # Use together with compose.yaml; same project and PostgreSQL volume.
+x-public-env: &public-env
+  ODIN_ORIGIN: https://${ODIN_DOMAIN:?Define ODIN_DOMAIN en .env}
+  ODIN_SECURE_COOKIES: 'true'
 services:
   api:
-    environment:
-      ODIN_ORIGIN: https://odin.example.com
-      ODIN_SECURE_COOKIES: 'true'
+    environment: *public-env
     command: [uvicorn, 'odin.main:app', --host, 0.0.0.0, --port, '8000', --proxy-headers, --forwarded-allow-ips, '172.30.90.2', --no-access-log]
     networks:
       default: {}
       public_edge:
         ipv4_address: 172.30.90.3
   worker:
-    environment:
-      ODIN_ORIGIN: https://odin.example.com
-      ODIN_SECURE_COOKIES: 'true'
+    environment: *public-env
+  analyst:
+    environment: *public-env
   telegram:
-    environment:
-      ODIN_ORIGIN: https://odin.example.com
-      ODIN_SECURE_COOKIES: 'true'
+    environment: *public-env
   probe:
-    environment:
-      ODIN_ORIGIN: https://odin.example.com
-      ODIN_SECURE_COOKIES: 'true'
+    environment: *public-env
   tracer:
-    environment:
-      ODIN_ORIGIN: https://odin.example.com
-      ODIN_SECURE_COOKIES: 'true'
+    environment: *public-env
   web:
+    environment:
+      ODIN_DOMAIN: ${ODIN_DOMAIN}
     ports: !override
       - '80:80'
       - '443:443'

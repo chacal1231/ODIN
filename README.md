@@ -26,7 +26,7 @@ ODIN **solo lee** las fuentes: no configura equipos, no reinicia ONUs y no abre 
 
 ## Requisitos
 
-- Un servidor Linux con Docker Engine y Docker Compose, y Python 3 para generar los secretos. No hace falta instalar Node ni Python del backend en el host.
+- Un servidor Linux con Docker Engine y Docker Compose v2.24 o posterior. En Debian y Ubuntu, el script de instalación los instala si faltan. No hace falta instalar Node ni Python en el host.
 - Orientativo para un ISP mediano: 4 vCPU, 8 GB de RAM y 50 GB de disco. El sondeador usa hasta 2 CPU y 1,5 GB; WhatsApp (Chromium), hasta 1 GB.
 - Que el servidor llegue a las fuentes del ISP (LibreNMS, Zabbix, Graylog), a internet (SmartOLT, Telegram, WhatsApp y, si se elige, DeepSeek) y a los destinos que mide.
 - **Resolver con los DNS recursivos del ISP**, no con resolvedores públicos. Así las CDN (YouTube, Netflix, TikTok) le entregan a ODIN el mismo nodo que a los clientes.
@@ -36,27 +36,29 @@ Arquitectura, servicios, límites de recursos y conexiones salientes: [Arquitect
 ## Instalación
 
 ```bash
-bash scripts/setup-local.sh          # genera .env y la clave maestra; no sobrescribe nada existente
+bash scripts/setup-local.sh
+```
+
+El script:
+- instala Docker y Compose si faltan;
+- genera la clave maestra y la contraseña de PostgreSQL;
+- pregunta el nombre del ISP, la zona horaria y cómo se publica el panel, y escribe `.env`;
+- si se le pide, construye, levanta ODIN y crea el primer administrador.
+
+Se puede volver a ejecutar para cambiar la publicación: nunca regenera los secretos, ofrece los valores actuales y conserva las demás líneas de `.env`. Sin terminal toma los valores por defecto y no levanta nada. Para hacerlo a mano:
+
+```bash
 docker compose up --build -d
 docker compose exec api python -m odin.cli create-admin nocadmin
 ```
 
 La CLI pide una contraseña temporal sin mostrarla. En el primer ingreso se exige una contraseña nueva de al menos 14 caracteres y el registro de MFA en un autenticador TOTP (código QR o clave), y se muestran ocho códigos de recuperación. No existen usuarios ni contraseñas predeterminadas.
 
-Por defecto la web escucha solo en `127.0.0.1:8080` (`ODIN_WEB_PORT`). Desde otra máquina, entrar con un túnel SSH que conserve `localhost` como origen. Hay dos formas de publicarla:
+El script ofrece tres formas de publicar el panel. Guarda la elegida en `COMPOSE_FILE` dentro de `.env`, así que `docker compose` la usa sin repetir los `-f`:
 
-- **Con dominio propio y puertos 80/443 libres**: `compose.public.yaml` y `deploy/Caddyfile.public`, cambiando `odin.example.com` por el dominio.
-- **Por la IP pública en un puerto propio**, con HTTPS de la CA interna de Caddy: definir en `.env` `ODIN_WAN_HOST` (IP pública), `ODIN_WAN_PORT` (8090 por defecto) y, opcionalmente, `ODIN_WAN_ALLOW` con las redes autorizadas.
-
-```bash
-docker compose -f compose.yaml -f compose.wan.yaml up --build -d
-```
-
-Para no tener que repetir los `-f` en cada comando, agregar a `.env`:
-
-```
-COMPOSE_FILE=compose.yaml:compose.wan.yaml
-```
+- **Local**: la web escucha solo en `127.0.0.1:8080` (`ODIN_WEB_PORT`). Desde otra máquina, entrar con un túnel SSH que conserve `localhost` como origen.
+- **WAN**: por la IP pública en un puerto propio, con HTTPS de la CA interna de Caddy (`compose.wan.yaml`). Usa `ODIN_WAN_HOST` (IP pública), `ODIN_WAN_PORT` (8090 por defecto) y, opcionalmente, `ODIN_WAN_ALLOW` con las redes autorizadas.
+- **Dominio**: dominio propio con los puertos 80 y 443 libres y certificado de Let's Encrypt (`compose.public.yaml`). Usa `ODIN_DOMAIN`.
 
 Docker publica el puerto por encima de `ufw`: si solo se debe entrar desde el NOC, restringirlo con `ODIN_WAN_ALLOW`. No publicar el Compose de desarrollo tal cual ni desactivar `Secure` para un dominio público.
 

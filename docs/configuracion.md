@@ -2,7 +2,7 @@
 
 La configuración vive en tres lugares:
 
-- **`.env`**: variables de entorno `ODIN_*`. Lo crea `scripts/setup-local.sh` y nunca se sobrescribe.
+- **`.env`**: variables de entorno `ODIN_*`. Lo crea y completa `scripts/setup-local.sh`, que nunca regenera los secretos y conserva las demás líneas.
 - **`.secrets/master.key`**: la clave maestra.
 - **La interfaz**: fuentes, organización del monitoreo, guías, turnos y WhatsApp, guardados cifrados o en la base.
 
@@ -26,7 +26,8 @@ La configuración vive en tres lugares:
 | `ODIN_SESSION_SECONDS` | `43200` | Duración máxima de una sesión. |
 | `ODIN_WEB_PORT` | `8080` | Puerto local de la web (solo en `127.0.0.1`). |
 | `ODIN_WAN_HOST`, `ODIN_WAN_PORT`, `ODIN_WAN_ALLOW` | — | Publicación por IP pública con `compose.wan.yaml`. |
-| `COMPOSE_FILE` | — | Por ejemplo `compose.yaml:compose.wan.yaml`, para que `docker compose up` use siempre la publicación elegida. |
+| `ODIN_DOMAIN` | — | Dominio del panel con `compose.public.yaml`; Caddy obtiene su certificado. |
+| `COMPOSE_FILE` | — | La publicación elegida, por ejemplo `compose.yaml:compose.wan.yaml`, para que `docker compose up` la use siempre. La define el script de instalación. |
 
 ## DNS del servidor
 
