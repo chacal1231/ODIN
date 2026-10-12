@@ -37,32 +37,32 @@ def pon_text(p):
 
 
 def reading(name, unreachable, uplinks, pons):
-    """(title, action, critical) for level 1."""
+    """(code, title, action, critical) for level 1; the code names the situation of its guide (noc/guides.py)."""
     los = [p for p in pons if p['cause'] == 'los']
     starts = sorted(p['started_at'] for p in los if p['started_at'])
     together = len(los) >= 2 and (not starts or starts[-1] - starts[0] <= TOGETHER)
     affected = sum(p['affected'] for p in pons)
     if unreachable:
         total = ' y tiene PON caídos: posible caída total de la OLT' if pons else ''
-        return (f'SmartOLT no llega a la OLT {name}{total}',
+        return ('unreachable', f'SmartOLT no llega a la OLT {name}{total}',
                 f'Informar caída de la OLT {name} ({zones(pons)}). N2 revisa energía y uplink del POP.', True)
     if uplinks:
-        return (f'Uplink {", ".join(uplinks)} de la OLT {name} caído' + (f': {len(pons)} PON con caídas' if pons else ''),
+        return ('uplink', f'Uplink {", ".join(uplinks)} de la OLT {name} caído' + (f': {len(pons)} PON con caídas' if pons else ''),
                 f'Informar: la OLT {name} perdió su uplink ({zones(pons)}). N2 revisa el enlace hacia el POP.', True)
     if together:
-        return (f'Corte de fibra común: {len(los)} PON con LOS a la vez, {sum(p["affected"] for p in los)} ONUs ({zones(los)})',
+        return ('fiber_common', f'Corte de fibra común: {len(los)} PON con LOS a la vez, {sum(p["affected"] for p in los)} ONUs ({zones(los)})',
                 f'Informar corte de fibra en {zones(los)}. N2 despacha a campo: tramo común a esos PON o tarjeta de la OLT.', True)
     if los:
         p = max(los, key=lambda x: x['affected'])
         splitters = f', splitters {", ".join(p["odbs"][:5])}' if p['odbs'] else ''
-        return (f'Corte de fibra en el {pon_text(p)}: {p["affected"]} de {p["subscribers"]} ONUs (zona {p["zone"] or "sin zona"}{splitters})'
+        return ('fiber', f'Corte de fibra en el {pon_text(p)}: {p["affected"]} de {p["subscribers"]} ONUs (zona {p["zone"] or "sin zona"}{splitters})'
                 + (f'; {len(los) - 1} PON más con LOS en otros momentos' if len(los) > 1 else ''),
                 f'Informar corte de fibra en {zones(los)}. N2 despacha a campo.', affected >= AFFECTED_CRITICAL)
     power = [p for p in pons if p['cause'] == 'power']
     if power:
-        return (f'Falla de energía en la zona: {sum(p["affected"] for p in power)} ONUs sin energía ({zones(power)})',
+        return ('power', f'Falla de energía en la zona: {sum(p["affected"] for p in power)} ONUs sin energía ({zones(power)})',
                 f'Informar falla eléctrica en {zones(power)}: no es la red. No requiere despacho.', affected >= AFFECTED_CRITICAL)
-    return (f'ONUs sin conexión sin causa identificada: {affected} ONUs ({zones(pons)})',
+    return ('offline', f'ONUs sin conexión sin causa identificada: {affected} ONUs ({zones(pons)})',
             f'Informar y vigilar {zones(pons)}. Si sigue, N2 revisa el PON.', affected >= AFFECTED_CRITICAL)
 
 
@@ -117,8 +117,8 @@ def ingest(db, touched, stamp):
                   'uplinks_down': down_links, 'pons': pons, 'affected': sum(p['affected'] for p in pons),
                   'subscribers': sum(p['subscribers'] for p in pons), 'zones': sorted({p['zone'] for p in pons if p['zone']})}
         if problem:
-            title, action, critical = reading(olt.name, unreachable, down_links, pons)
-            detail['reading'] = {'title': title, 'action': action}
+            code, title, action, critical = reading(olt.name, unreachable, down_links, pons)
+            detail['reading'] = {'code': code, 'title': title, 'action': action}
             case.severity = 'critical' if critical else 'warning'
             if case.last_state != 'down':case.last_state, case.last_state_at, case.resolved_at = 'down', stamp, None;changed = True
         else:

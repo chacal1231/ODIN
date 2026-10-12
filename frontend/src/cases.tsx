@@ -3,6 +3,7 @@ import { Drawer } from "./drawer";
 import { Paged } from "./pager";
 import { ProbeBadge } from "./probes";
 import { CaseAnalysis } from "./analysis";
+import { CaseCommunication } from "./noc";
 import type { ChatCase } from "./chat";
 import { KnowledgePanel, KnowledgeDraft } from "./knowledge";
 
@@ -191,6 +192,7 @@ function CaseDetail({ api, zone, admin, id, onSelect, onChange, onAsk, onDraft, 
         <td className="mono">{p.board}/{p.port}</td><td>{causes[p.cause] || p.cause}</td><td>{p.affected} de {p.subscribers}</td>
         <td>{p.zone || "—"}</td><td>{(p.odbs || []).join(", ") || "—"}</td><td>{date(p.started_at)}</td></tr>)}</tbody>
     </table></div>}
+    <CaseCommunication api={api} caseId={id} zone={zone} onError={setError} />
     <dl className="event-detail">
       {data.detail?.impact?.text && <><dt>Impacto en clientes</dt><dd>{data.detail.impact.text}
         {data.detail.impact.olts?.length > 0 && <ul className="case-impact">{data.detail.impact.olts.map((o: any) => <li key={o.id}>

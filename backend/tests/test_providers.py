@@ -143,7 +143,7 @@ def test_carrier_incidents_go_to_the_providers_group_and_replies_become_notes():
     assert sent[1]['text'].startswith('Este tema recibirá las fallas con proveedores')
     (incident,) = sent[2:]
     assert incident['chat_id'] == -200 and incident['message_thread_id'] == 55
-    assert '📡 <b>CARRIER</b> · tránsito' in incident['text'] and 'Sesión BGP 198.51.100.134 · PE-A' in incident['text']
+    assert '<b>Proveedor:</b> CARRIER (tránsito)' in incident['text'] and incident['text'].startswith('<b>[CRÍTICO]</b> Sesión BGP · 198.51.100.134 · PE-A')
     assert f'#caso={case_id}' in incident['text']
     thread = bot.next_id
 
@@ -152,7 +152,7 @@ def test_carrier_incidents_go_to_the_providers_group_and_replies_become_notes():
                    message(4, 7, 'Ticket CARRIER #4411, ETA 2 h, corte de fibra', chat=-200, reply_to=thread, topic=55)]
     run(bot)
     replies = [p['text'] for p in bot.sent()]
-    assert replies[0].startswith('Vincula tu cuenta') and replies[1] == '📝 Registrado en el caso por admin.'
+    assert replies[0].startswith('Vincula tu cuenta') and replies[1] == '<b>[NOTA REGISTRADA]</b> en el caso, por admin.'
     with session() as db:
         (note,) = db.scalars(select(CaseNote))
         assert (note.case_id, note.author_id, note.text) == (case_id, admin_id, 'Proveedor (Telegram): Ticket CARRIER #4411, ETA 2 h, corte de fibra')
@@ -160,14 +160,14 @@ def test_carrier_incidents_go_to_the_providers_group_and_replies_become_notes():
 
     bot.calls.clear();run(bot)
     (back,) = bot.sent()
-    assert back['text'].startswith('🟡 <b>Restablecido, en observación</b>') and back['reply_parameters']['message_id'] == thread
+    assert back['text'].startswith('<b>[RESTABLECIDO · EN OBSERVACIÓN]</b>') and back['reply_parameters']['message_id'] == thread
     bot.calls.clear();run(bot)
     assert bot.sent() == []
     with session() as db:
         row = db.get(Case, case_id);row.state, row.closed_at, row.drops = 'closed', stamp + 2400, 2;db.commit()
     bot.calls.clear();run(bot)
     (closed,) = bot.sent()
-    assert closed['text'] == '✅ <b>Cerrado</b> · 198.51.100.134 · duró 40 min · 2 caída(s) en total'
+    assert closed['text'] == '<b>[CERRADO]</b> 198.51.100.134 · <b>Duración:</b> 40 min · <b>Caídas:</b> 2'
     bot.calls.clear();run(bot)
     assert bot.sent() == []
     with session() as db:
@@ -180,4 +180,4 @@ def test_transport_is_named_by_its_whole_description():
                                              'description': 'TRANSPORTE-CENTRO-NORTE-INTXA', 'remote_device_name': 'PE-B'})
         text = telegram.provider_text(case, telegram.carrier(case))
         db.rollback()
-    assert text.startswith('📡 <b>TRANSPORTE-CENTRO-NORTE-INTXA</b> · transporte')
+    assert '<b>Proveedor:</b> TRANSPORTE-CENTRO-NORTE-INTXA (transporte)' in text

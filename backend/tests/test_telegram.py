@@ -65,7 +65,7 @@ def test_case_diagnosis_and_verdict_travel_through_the_noc_group():
     assert first[2]['text'].startswith('Este tema recibirá') and first[3]['message_thread_id'] == 4242
     first = first[1:]
     case_message = first[2]
-    assert 'Interfaz Ethernet51/1' in case_message['text'] and 'TRANSITO-CARRIER-100G' in case_message['text'] and f'#caso={case_id}' in case_message['text']
+    assert case_message['text'].startswith('<b>[CRÍTICO]</b> Interfaz · Ethernet51/1') and 'TRANSITO-CARRIER-100G' in case_message['text'] and f'#caso={case_id}' in case_message['text']
 
     with session() as db:
         db.add(Analysis(id=uid(), kind='case', case_id=case_id, requested_by='odin', status='done', finished_at=now(), progress={}, pack={},
@@ -82,7 +82,7 @@ def test_case_diagnosis_and_verdict_travel_through_the_noc_group():
                    button(5, 7, f'v:partial:{analysis_id}', 105)]
     run(bot)
     answers = [p['text'] for m, p in bot.calls if m == 'answerCallbackQuery']
-    assert answers == ['Vincula tu cuenta en ODIN → Mi acceso', 'Cuéntanos qué pasó']
+    assert answers == ['Vincula tu cuenta en ODIN → Mi acceso', 'Indicar la causa encontrada']
     prompt_id = bot.next_id
     bot.calls.clear()
     bot.updates = [message(6, 7, 'Fue un corte de fibra de Carrier en Bogotá, ticket 123', reply_to=prompt_id)]
@@ -91,9 +91,9 @@ def test_case_diagnosis_and_verdict_travel_through_the_noc_group():
         (review,) = db.scalars(select(AnalysisReview))
         assert (review.verdict, review.author_id, review.correction) == ('partial', admin_id, 'Fue un corte de fibra de Carrier en Bogotá, ticket 123')
         case = db.get(Case, case_id);case.last_state, case.last_state_at = 'up', stamp + 900;db.commit()
-    assert bot.sent()[0]['text'].startswith('🟡 Parcialmente correcto')
+    assert bot.sent()[0]['text'].startswith('<b>[VALORACIÓN]</b> Parcialmente correcto')
     bot.calls.clear();run(bot)
-    assert bot.sent()[0]['text'].startswith('✅ <b>Restablecido</b> · Ethernet51/1') and 'duró 15 min' in bot.sent()[0]['text']
+    assert bot.sent()[0]['text'].startswith('<b>[RESTABLECIDO]</b> Interfaz · Ethernet51/1') and '<b>Duración:</b> 15 min' in bot.sent()[0]['text']
     bot.calls.clear();run(bot)
     assert bot.sent() == []  # nothing new
     with session() as db:
@@ -133,7 +133,7 @@ def test_questions_from_the_group_are_answered_in_the_thread_and_kept_as_convers
                    message(4, 8, '¿hubo cambios de configuración antes?', reply_to=51, topic=4242)]  # one question at a time
     run(bot)
     replies = [p['text'] for p in bot.sent()]
-    assert replies[0].startswith('Vincula tu cuenta') and replies[2].startswith('⏳ Pensando…') and replies[3].startswith('Ya tienes una pregunta en curso')
+    assert replies[0].startswith('Vincula tu cuenta') and replies[2].startswith('<b>[CONSULTA EN CURSO]</b>') and replies[3].startswith('Ya tienes una pregunta en curso')
     with session() as db:
         (question,) = db.scalars(select(Analysis).where(Analysis.kind == 'chat'))
         request = question.pack['request']
@@ -144,8 +144,8 @@ def test_questions_from_the_group_are_answered_in_the_thread_and_kept_as_convers
     bot.calls.clear();bot.updates = [message(5, 8, '¿hubo cambios de configuración antes?', reply_to=51, topic=4242)]
     run(bot)
     thinking, answer = bot.sent()
-    assert thinking['text'] == '⏳ Pensando sobre el caso… Suele tardar 1–3 minutos.' and thinking['message_thread_id'] == 4242
-    assert answer['text'].startswith('💬 Cayó la sesión con Carrier a las 14:05.') and answer['reply_parameters']['message_id'] == 3
+    assert thinking['text'] == '<b>[CONSULTA EN CURSO]</b> Caso referido. Tiempo estimado: 1–3 min.' and thinking['message_thread_id'] == 4242
+    assert answer['text'].startswith('<b>[RESPUESTA ODIN]</b>\nCayó la sesión con Carrier a las 14:05.') and answer['reply_parameters']['message_id'] == 3
     with session() as db:
         case_question = db.scalar(select(Analysis).where(Analysis.kind == 'chat', Analysis.status == 'pending'))
         assert case_question.pack['request']['case_id'] == case_id

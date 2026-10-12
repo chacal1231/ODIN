@@ -22,7 +22,9 @@ class Settings(BaseSettings):
     trace_concurrency: int = 1
     # The ISP's own autonomous system; detected from the traces when unset.
     asn: int | None = None
-    # Local time for the evening peak of adaptive baselines.
+    # ODIN's WhatsApp service (whatsapp/), inside the Compose network only.
+    whatsapp_url: str = 'http://whatsapp:3000'
+    # Local time for the evening peak of adaptive baselines, shifts and messages.
     timezone: str = 'America/Bogota'
     idle_seconds: int = 1800
     session_seconds: int = 43200

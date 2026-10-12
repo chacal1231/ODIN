@@ -1,0 +1,12 @@
+{
+  "name": "odin-whatsapp",
+  "private": true,
+  "description": "ODIN's link to one WhatsApp account: QR pairing, the account's groups and sending to the NOC group.",
+  "main": "index.js",
+  "scripts": {
+    "start": "node index.js"
+  },
+  "dependencies": {
+    "whatsapp-web.js": "1.34.7"
+  }
+}

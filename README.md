@@ -98,6 +98,7 @@ La cola admite idempotencia, lease con heartbeat, recuperación tras expiración
 - [Vigilancia de ODIN](docs/vigilancia-odin.md): el sondeador, los lectores de eventos y la cola se vigilan a sí mismos y los avisos aparecen en la barra de estado.
 - [OLTs con SmartOLT](docs/olts-smartolt.md): inventario de OLTs, puertos PON, uplinks y caídas de PON, en solo lectura.
 - [Trazas de ruta](docs/trazas-de-ruta.md): mtr hacia cada destino cada 15 minutos y en cada incidente, con cada salto leído contra el inventario.
+- [Comunicación del NOC](docs/comunicacion-noc.md): guías para N1, informes al grupo del NOC por Telegram y WhatsApp, plazo para informar y entrega de turno.
 - [Identidad visual](docs/identidad-visual.md)
 
 ### Organización del monitoreo

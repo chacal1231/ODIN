@@ -867,3 +867,75 @@ class SmartoltState(Base):
     rate_remaining = Column(Integer)
     rate_limit = Column(Integer)
     rate_observed_at = Column(BigInteger)
+
+
+class NocSettings(Base):
+    """How fast level 1 must report a case and the NOC's shifts (local times, ODIN_TIMEZONE)."""
+    __tablename__ = 'noc_settings'
+    id = Column(String(10), primary_key=True, default='noc')
+    report_minutes = Column(Integer, nullable=False, default=10)
+    shifts = Column(JSON, nullable=False)
+    updated_at = Column(BigInteger)
+    updated_by = Column(String(36))
+
+
+class NocGuide(Base):
+    """An ISP's own version of the guide for one situation; without a row the built-in guide applies (noc/guides.py)."""
+    __tablename__ = 'noc_guides'
+    situation = Column(String(40), primary_key=True)
+    title = Column(String(120), nullable=False)
+    verify = Column(JSON, nullable=False)
+    template = Column(Text, nullable=False)
+    escalate = Column(String(500), nullable=False)
+    escalate_minutes = Column(Integer)
+    updated_at = Column(BigInteger, nullable=False)
+    updated_by = Column(String(36))
+
+
+class CaseReport(Base):
+    """What level 1 reported about a case to the NOC group, by whom and when, and how each channel delivered it."""
+    __tablename__ = 'case_reports'
+    id = Column(String(36), primary_key=True, default=uid)
+    case_id = Column(ForeignKey('cases.id'), nullable=False)
+    kind = Column(String(20), nullable=False)  # inicial, actualizacion, restablecido, escalado (to level 2)
+    text = Column(Text, nullable=False)
+    author_id = Column(String(36), nullable=False)
+    created_at = Column(BigInteger, nullable=False)
+    deliveries = Column(JSON, nullable=False, default=dict)  # channel -> {'status': pending|sent|failed, 'id', 'error', 'at'}
+    __table_args__ = (Index('ix_case_reports_case', 'case_id', 'created_at'),)
+
+
+class ShiftReport(Base):
+    """The summary handed over at the end of a shift (cierre) or at its start for the hours nobody watched (apertura)."""
+    __tablename__ = 'shift_reports'
+    id = Column(String(36), primary_key=True, default=uid)
+    kind = Column(String(20), nullable=False)
+    starts_at = Column(BigInteger, nullable=False)
+    ends_at = Column(BigInteger, nullable=False)
+    text = Column(Text, nullable=False)
+    data = Column(JSON, nullable=False)
+    created_at = Column(BigInteger, nullable=False)
+    deliveries = Column(JSON, nullable=False, default=dict)
+    __table_args__ = (UniqueConstraint('kind', 'ends_at'),)
+
+
+class WhatsAppState(Base):
+    """The WhatsApp group of the NOC, chosen by an administrator among the paired account's groups."""
+    __tablename__ = 'whatsapp_state'
+    id = Column(String(10), primary_key=True, default='whatsapp')
+    group_id = Column(String(120))
+    group_name = Column(String(200))
+    paused = Column(Boolean, nullable=False, default=False)
+    heartbeat_at = Column(BigInteger)
+    last_error = Column(String(200))
+
+
+class WhatsAppMessage(Base):
+    """The thread of one alerting case in the WhatsApp group: the case message, quoted by its diagnosis and recovery."""
+    __tablename__ = 'whatsapp_messages'
+    case_id = Column(ForeignKey('cases.id'), primary_key=True)
+    group_id = Column(String(120), nullable=False)
+    message_id = Column(String(200), nullable=False)
+    analysis_id = Column(String(36))
+    recovered = Column(Boolean, nullable=False, default=False)
+    notified_at = Column(BigInteger, nullable=False)

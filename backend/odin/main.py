@@ -407,3 +407,6 @@ app.include_router(inbox_router(current))
 
 from .setup import router as setup_router
 app.include_router(setup_router(current, admin))
+
+from .noc.api import router as noc_router
+app.include_router(noc_router(current, admin))

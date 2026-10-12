@@ -1069,3 +1069,29 @@ nav button {
 .inbox-main .inbox-impact.confirmed {
   color: var(--error-text);
 }
+
+/* NOC communication: a case's reports, the shift handover text. */
+.noc-communication {
+  margin: 16px 0;
+}
+.noc-reports {
+  padding-left: 18px;
+}
+.noc-reports p {
+  margin: 4px 0;
+  white-space: pre-wrap;
+}
+.noc-shift-text {
+  white-space: pre-wrap;
+  font-family: var(--mono);
+  font-size: 13px;
+}
+.noc-guides {
+  padding-left: 18px;
+}
+.inbox-main .inbox-report {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+  margin-top: 4px;
+}

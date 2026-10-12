@@ -1,6 +1,6 @@
 import React, { useState, useEffect, FormEvent } from "react";
 import { createRoot } from "react-dom/client";
-import qrcode from "qrcode-generator";
+import { Qr } from "./qr";
 import "./style.css";
 import { Brand, Clock, ThemePicker, useTheme } from "./branding";
 import { Destinations, Incidents } from "./probes";
@@ -12,6 +12,7 @@ import { Inventory, IntegrationManager, statusNames } from "./inventory";
 import { Olts } from "./olts";
 import { Inbox } from "./inbox";
 import { Setup } from "./setup";
+import { NocCommunication } from "./noc";
 
 type User = {
   id: string;
@@ -28,28 +29,6 @@ type Challenge = {
   provisioning_uri?: string;
 };
 let csrf = "";
-// Drawn in the browser: the TOTP secret never goes to a QR service.
-function TotpQr({ uri }: { uri: string }) {
-  const qr = qrcode(0, "M");
-  qr.addData(uri);
-  qr.make();
-  const n = qr.getModuleCount();
-  let d = "";
-  for (let r = 0; r < n; r++)
-    for (let c = 0; c < n; c++) if (qr.isDark(r, c)) d += `M${c} ${r}h1v1h-1z`;
-  return (
-    <svg
-      className="totp-qr"
-      viewBox={`-4 -4 ${n + 8} ${n + 8}`}
-      role="img"
-      aria-label="Código QR para el autenticador"
-      shapeRendering="crispEdges"
-    >
-      <rect x={-4} y={-4} width={n + 8} height={n + 8} fill="#fff" />
-      <path d={d} fill="#000" />
-    </svg>
-  );
-}
 async function api(path: string, method = "GET", body?: unknown) {
   const response = await fetch("/api/v1" + path, {
     method,
@@ -76,11 +55,11 @@ const sections: [string, string[]][] = [
   ["Operación", ["Casos", "Incidentes", "Chat"]],
   ["Monitoreo", ["Red propia", "OLTs", "Servicios externos"]],
   ["Fuentes", ["Eventos"]],
-  ["Configuración", ["Puesta en marcha", "Mapa e inventario", "Administración"]],
+  ["Configuración", ["Puesta en marcha", "Mapa e inventario", "Comunicación NOC", "Administración"]],
 ];
 const sectionIcons: Record<string, string> = {
   Inicio: "◈", Casos: "⚑", Incidentes: "◷", Chat: "✉", "Red propia": "◎", OLTs: "⊚", "Servicios externos": "◌",
-  Eventos: "◇", "Puesta en marcha": "☑", "Mapa e inventario": "▦", Administración: "⚙",
+  Eventos: "◇", "Puesta en marcha": "☑", "Mapa e inventario": "▦", "Comunicación NOC": "☎", Administración: "⚙",
 };
 const names: Record<string, string> = {
   zabbix: "Zabbix",
@@ -291,7 +270,7 @@ function App() {
                       durante el registro.
                     </p>
                     {challenge.provisioning_uri && (
-                      <TotpQr uri={challenge.provisioning_uri} />
+                      <Qr text={challenge.provisioning_uri} label="Código QR para el autenticador" />
                     )}
                     <code className="secret">{challenge.mfa_secret}</code>
                   </div>
@@ -351,7 +330,7 @@ function App() {
             <div className="nav-group" key={label || "inicio"} role="group" aria-label={label || undefined}>
               {label && <small aria-hidden="true">{label}</small>}
               {items
-                .filter((x) => !["Administración", "Puesta en marcha"].includes(x) || user.role === "admin")
+                .filter((x) => !["Administración", "Puesta en marcha", "Comunicación NOC"].includes(x) || user.role === "admin")
                 .map((x) => (
                   <button
                     key={x}
@@ -453,7 +432,7 @@ function App() {
                   <button onClick={() => go("Puesta en marcha")}>Continuar</button>
                 </p>
               )}
-              {homeTab === "bandeja" ? <Inbox data={inbox} zone={zone} onNavigate={go} /> : <>
+              {homeTab === "bandeja" ? <Inbox data={inbox} zone={zone} onNavigate={go} api={api} /> : <>
               <div className="title-row">
                 <small className="muted">Monitoreo, incidentes y fuentes</small>
                 <button
@@ -557,6 +536,8 @@ function App() {
             }} />
           ) : page === "Mi acceso" ? (
             <Recovery onError={setError} onCodes={setCodes} />
+          ) : page === "Comunicación NOC" ? (
+            <NocCommunication api={api} onError={setError} />
           ) : page === "Administración" ? (
             <Admin onError={setError} onCodes={setCodes} />
           ) : (

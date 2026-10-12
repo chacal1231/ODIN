@@ -58,7 +58,7 @@ def test_power_outage_is_not_the_network():
         o = olt(db);outage(db, o, 1, cause='power', affected=12);db.commit()
         correlator.run(db, T + 60);db.commit()
         reading = access(db).detail['reading']
-        assert reading == {'title': 'Falla de energía en la zona: 12 ONUs sin energía (Norte)',
+        assert reading == {'code': 'power', 'title': 'Falla de energía en la zona: 12 ONUs sin energía (Norte)',
                            'action': 'Informar falla eléctrica en Norte: no es la red. No requiere despacho.'}
 
 

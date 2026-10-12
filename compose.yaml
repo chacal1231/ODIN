@@ -117,6 +117,19 @@ services:
       migrate:
         condition: service_completed_successfully
     restart: unless-stopped
+  whatsapp:
+    # The WhatsApp NOC group (whatsapp-web.js): QR pairing and sending. Only reachable inside this network,
+    # with a token derived from the master key; the paired session survives restarts in its volume.
+    build: ./whatsapp
+    volumes:
+      - ./.secrets/master.key:/run/secrets/master.key:ro
+      - whatsapp_data:/data
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+    shm_size: 256m
+    mem_limit: 1g
+    pids_limit: 256
+    restart: unless-stopped
   catalogs:
     # One-shot on every start: loads the reviewed catalogs and validates them from the probe's network.
     build:
@@ -147,3 +160,4 @@ services:
     restart: unless-stopped
 volumes:
   postgres_data:
+  whatsapp_data:

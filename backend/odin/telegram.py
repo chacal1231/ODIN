@@ -13,6 +13,8 @@ with /proveedores: what fails, since when, and every change until it closes. A r
 (the carrier's ticket, its ETA, what they said) becomes a note of the case, so the follow-up stays in ODIN. Linked users ask about the network with /pregunta [1h|6h|24h|7d] <question>, or
 about a case by replying to its thread; the chat of ODIN answers (one run at a time) and the answer is posted in the
 thread. Each question is also kept as a conversation of its author in ODIN.
+The same process runs the WhatsApp NOC group (noc/whatsapp.py), delivers level-1 reports and hands over shifts
+(noc/reports.py). Messages are technical reports with fixed fields (noc/messages.py).
 What is sent leaves the network: names, addresses and log excerpts of cases.
 """
 import datetime as dt
@@ -30,6 +32,7 @@ from .inventory.connectors import Transport, ConnectorError, clean
 from .models import (Analysis, Case, CaseNote, ChatMessage, Conversation, Integration, TelegramLink, TelegramMessage, TelegramPrompt,
                      TelegramProviderMessage, TelegramQuestion, TelegramState, User, now, uid)
 from .security import audit, decrypt
+from .noc import messages, reports
 
 ZONE = ZoneInfo('America/Bogota')
 CODE_SECONDS = 600
@@ -37,7 +40,7 @@ RENOTIFY = 600  # a case that drops again after recovering is announced at most 
 KINDS = {'bgp_session': 'Sesión BGP', 'interface': 'Interfaz', 'latency': 'Latencia hacia', 'access': 'Caída de acceso en'}
 PERIODS = {'1h': 3600, '6h': 21600, '24h': 86400, '7d': 604800}
 CARRIER_ROLES = ('transit', 'transport', 'ixp', 'peering')
-VERDICTS = {'correct': '✅ Correcto', 'partial': '🟡 Parcialmente correcto', 'incorrect': '❌ Incorrecto'}
+VERDICTS = {'correct': '<b>[VALORACIÓN]</b> Correcto', 'partial': '<b>[VALORACIÓN]</b> Parcialmente correcto', 'incorrect': '<b>[VALORACIÓN]</b> Incorrecto'}
 stop = threading.Event()
 
 
@@ -98,42 +101,23 @@ def link(case):
 def case_text(db, case):
     from .cases.api import isolation, related_cases
     from .cases.entities import Resolver
-    role = case.detail.get('neighbor') or case.detail.get('port') or {}
-    lines = [f'🔴 <b>{esc(KINDS.get(case.kind, case.kind))} {esc(case.subject)}</b> · {esc(case.entity_label)}']
-    if role.get('summary'):lines.append(esc(role['summary'], 600))
-    elif role.get('description'):lines.append(f'{esc(role.get("label") or "sin clasificar")} «{esc(role["description"], 300)}»')
-    if case.kind == 'access' and (case.detail.get('reading') or {}).get('title'):lines.append(esc(case.detail['reading']['title'], 400))
-    if (case.detail.get('impact') or {}).get('text'):lines.append(f'👥 {esc(case.detail["impact"]["text"], 400)}')
-    lines.append(f'Desde {when(case.opened_at)} · {"crítico" if case.severity == "critical" else "advertencia"}')
     alone = isolation(db, case, related_cases(db, case, Resolver(db))) if case.kind == 'bgp_session' else None
-    if alone:lines.append(f'⚠️ {esc(alone, 400)}')
-    lines.append(link(case))
-    return '\n'.join(lines)
+    return messages.telegram(messages.case_alert(case, alone))
 
 
 def external_text(cases):
-    names = ', '.join(sorted({c.subject for c in cases}))
-    return (f'🔴 <b>{len(cases)} servicios externos degradados a la vez</b>: {esc(names, 600)}\n'
-            'Varios servicios a la vez apuntan a la red o al origen de las sondas, no a cada proveedor.\n' + link(cases[0]))
+    return messages.telegram(messages.external_group(cases))
 
 
 def diagnosis_text(case, analysis):
-    result = analysis.result or {}
-    lines = [f'🧠 <b>Diagnóstico</b> · {esc(KINDS.get(case.kind, case.kind))} {esc(case.subject, 200)}', esc(result.get('resumen'), 1200)]
-    if result.get('hipotesis'):
-        first = result['hipotesis'][0]
-        lines.append(f'<b>Hipótesis principal</b> (confianza {esc(first.get("confianza"), 10)}): {esc(first.get("hipotesis"), 600)}')
-    for item in (result.get('recomendaciones') or [])[:3]:
-        lines.append(f'• {esc(item.get("accion"), 300)} — {esc(item.get("comprobacion"), 300)}')
-    lines.append('¿Fue así? Valóralo para que ODIN aprenda. Para preguntar sobre el caso, responde a este mensaje.')
-    return '\n'.join(lines)
+    return messages.telegram(messages.diagnosis(case, analysis))
 
 
 def buttons(analysis_id, case_id):
-    return {'inline_keyboard': [[{'text': '✅ Correcto', 'callback_data': f'v:correct:{analysis_id}'},
-                                 {'text': '🟡 Parcial', 'callback_data': f'v:partial:{analysis_id}'},
-                                 {'text': '❌ Incorrecto', 'callback_data': f'v:incorrect:{analysis_id}'}],
-                                [{'text': '👁 Reconocer', 'callback_data': f'k:{case_id}'}]]}
+    return {'inline_keyboard': [[{'text': 'Correcto', 'callback_data': f'v:correct:{analysis_id}'},
+                                 {'text': 'Parcial', 'callback_data': f'v:partial:{analysis_id}'},
+                                 {'text': 'Incorrecto', 'callback_data': f'v:incorrect:{analysis_id}'}],
+                                [{'text': 'Reconocer', 'callback_data': f'k:{case_id}'}]]}
 
 
 def send(bot, chat_id, text, reply_to=None, markup=None, thread=None):
@@ -163,11 +147,10 @@ def outbound(db, bot, st):
                 sent = send(bot, row.chat_id, diagnosis_text(case, analysis), row.message_id, buttons(analysis.id, case.id), st.thread_id)
                 row.analysis_id, row.diagnosis_message_id = analysis.id, sent['message_id'];db.commit()
         if not row.recovered and (case.last_state == 'up' or case.state == 'closed'):
-            back = case.resolved_at or case.last_state_at
-            send(bot, row.chat_id, f'✅ <b>Restablecido</b> · {esc(case.subject, 200)} · {when(back)} (duró {span(back - case.opened_at)})', row.message_id, thread=st.thread_id)
+            send(bot, row.chat_id, messages.telegram(messages.recovered(case)), row.message_id, thread=st.thread_id)
             row.recovered = True;db.commit()
         elif row.recovered and case.state == 'active' and case.last_state == 'down' and stamp - row.notified_at > RENOTIFY:
-            send(bot, row.chat_id, f'🔴 <b>Volvió a caer</b> · {esc(case.subject, 200)} · {when(case.last_state_at)}', row.message_id, thread=st.thread_id)
+            send(bot, row.chat_id, messages.telegram(messages.dropped_again(case)), row.message_id, thread=st.thread_id)
             row.recovered, row.notified_at = False, stamp;db.commit()
 
 
@@ -186,14 +169,12 @@ def carrier(case):
 def provider_text(case, info):
     # Transports are named by their whole description: the provider is not always its second word (roles.py).
     name = info.get('description') if info.get('role') == 'transport' else (info.get('provider') or info.get('description'))
-    lines = [f'📡 <b>{esc(name or "Proveedor sin identificar", 200)}</b> · {esc(info.get("label") or info.get("role"), 40)}',
-             f'🔴 {esc(KINDS.get(case.kind, case.kind))} {esc(case.subject, 200)} · {esc(case.entity_label, 200)}']
-    if info.get('summary'):lines.append(esc(info['summary'], 600))
-    elif info.get('description'):lines.append(f'Puerto «{esc(info["description"], 300)}»')
-    lines.append(f'Desde {when(case.opened_at)} · {"crítico" if case.severity == "critical" else "advertencia"} · {case.drops} caída(s)')
-    lines.append('Responde a este mensaje con el ticket del proveedor y sus novedades: queda como nota del caso.')
-    lines.append(link(case))
-    return '\n'.join(lines)
+    fields = [('Proveedor', f'{name or "sin identificar"} ({info.get("label") or info.get("role")})'),
+              ('Estado', f'activo desde {when(case.opened_at)} · {case.drops} caída(s)')]
+    fields.append(('Enlace', info['summary']) if info.get('summary') else ('Puerto', f'«{info.get("description")}»'))
+    fields.append(('Seguimiento', 'responder a este mensaje con el ticket del proveedor y sus novedades; queda como nota del caso'))
+    return messages.telegram(messages.Message('CRÍTICO' if case.severity == 'critical' else 'ADVERTENCIA', messages.title(case), fields,
+                                              link=messages.ref(case)))
 
 
 def providers(db, bot, st):
@@ -213,13 +194,13 @@ def providers(db, bot, st):
         reply = lambda text: send(bot, row.chat_id, text, row.message_id, thread=st.providers_thread_id)
         if case.state == 'closed':
             end = case.closed_at or case.resolved_at or case.last_state_at
-            reply(f'✅ <b>Cerrado</b> · {esc(case.subject, 200)} · duró {span(end - case.opened_at)} · {case.drops} caída(s) en total')
+            reply(f'<b>[CERRADO]</b> {esc(case.subject, 200)} · <b>Duración:</b> {span(end - case.opened_at)} · <b>Caídas:</b> {case.drops}')
             row.recovered = row.closed = True;db.commit()
         elif not row.recovered and case.last_state == 'up':
-            reply(f'🟡 <b>Restablecido, en observación</b> · {when(case.resolved_at or case.last_state_at)}. Se cierra si sigue estable.')
+            reply(f'<b>[RESTABLECIDO · EN OBSERVACIÓN]</b> {when(case.resolved_at or case.last_state_at)}. Se cierra si sigue estable.')
             row.recovered = True;db.commit()
         elif row.recovered and case.last_state == 'down' and stamp - row.notified_at > RENOTIFY:
-            reply(f'🔴 <b>Volvió a caer</b> · {when(case.last_state_at)} · {case.drops} caída(s)')
+            reply(f'<b>[NUEVA CAÍDA]</b> {when(case.last_state_at)} · <b>Caídas:</b> {case.drops}')
             row.recovered, row.notified_at = False, stamp;db.commit()
 
 
@@ -229,7 +210,7 @@ def answer_text(run):
         return f'No pude responder ({esc(run.error or run.status, 80)}). Intenta de nuevo en unos minutos.'
     missing = run.result.get('datos_faltantes') or []
     text = re.sub(r' +([.,;:)])', r'\1', re.sub(r'[ \t]{2,}', ' ', LABEL.sub('', run.result.get('respuesta') or ''))).strip()
-    return ('💬 ' + esc(text, 3200)
+    return ('<b>[RESPUESTA ODIN]</b>\n' + esc(text, 3200)
             + (f'\n<i>Faltan datos: {esc("; ".join(missing), 400)}</i>' if missing else '') + '\nReferencias completas en ODIN → Chat.')
 
 
@@ -252,7 +233,7 @@ def ask(db, bot, st, user, question, reply_to, period=PERIODS['6h'], case_id=Non
     message.analysis_id, conversation.context = run.id, context
     db.add(TelegramQuestion(analysis_id=run.id, chat_id=st.chat_id, message_id=reply_to, thread_id=st.thread_id, created_at=stamp))
     ahead = db.scalar(select(func.count()).select_from(Analysis).where(Analysis.status.in_(['pending', 'running']), Analysis.id != run.id))
-    return say('⏳ Pensando' + (' sobre el caso' if case_id else '') + '…' + (f' Hay {ahead} por delante en la cola.' if ahead else ' Suele tardar 1–3 minutos.'))
+    return say('<b>[CONSULTA EN CURSO]</b>' + (' Caso referido.' if case_id else '') + (f' En cola: {ahead} por delante.' if ahead else ' Tiempo estimado: 1–3 min.'))
 
 
 def linked(db, telegram_id):
@@ -272,19 +253,19 @@ def handle(db, bot, st, item):
             case = db.get(Case, rest)
             if case and not case.acknowledged_at:
                 case.acknowledged_at, case.acknowledged_by = now(), user.id;audit(db, 'case_acknowledged', user.id, case.id)
-                send(bot, chat, f'👁 Reconocido por {esc(user.username, 80)}', message.get('message_id'), thread=st.thread_id)
+                send(bot, chat, f'<b>[RECONOCIDO]</b> por {esc(user.username, 80)}', message.get('message_id'), thread=st.thread_id)
             return answer('Reconocido')
         verdict, _, analysis_id = rest.partition(':')
         if verdict == 'correct':
             try:review(db, analysis_id, user.id, 'correct')
             except (LookupError, ValueError):return answer('Ese análisis ya no se puede valorar')
-            send(bot, chat, f'{VERDICTS["correct"]} · valorado por {esc(user.username, 80)}', message.get('message_id'), thread=st.thread_id)
+            send(bot, chat, f'{VERDICTS["correct"]} · {esc(user.username, 80)}', message.get('message_id'), thread=st.thread_id)
             return answer('Valoración registrada')
         if verdict in ('partial', 'incorrect'):
-            prompt = send(bot, chat, f'{esc(user.username, 80)}, ¿qué pasó en realidad? <b>Responde a este mensaje</b> con lo que encontraron.',
+            prompt = send(bot, chat, f'<b>[CORRECCIÓN]</b> {esc(user.username, 80)}: responder a este mensaje con la causa encontrada.',
                           message.get('message_id'), {'force_reply': True, 'selective': True}, st.thread_id)
             db.add(TelegramPrompt(message_id=prompt['message_id'], chat_id=chat, analysis_id=analysis_id, user_id=user.id, verdict=verdict, created_at=now()))
-            return answer('Cuéntanos qué pasó')
+            return answer('Indicar la causa encontrada')
         return answer('Acción desconocida')
     message = item.get('message') or {}
     text = (message.get('text') or '').strip();chat = (message.get('chat') or {}).get('id')
@@ -334,14 +315,14 @@ def handle(db, bot, st, item):
         if not user:return reply('Vincula tu cuenta en ODIN → Mi acceso para registrar novedades.', message.get('message_id'))
         db.add(CaseNote(case_id=followed.case_id, author_id=user.id, text=('Proveedor (Telegram): ' + text)[:4000]))
         audit(db, 'case_note_added', user.id, followed.case_id)
-        return reply(f'📝 Registrado en el caso por {esc(user.username, 80)}.', message.get('message_id'))
+        return reply(f'<b>[NOTA REGISTRADA]</b> en el caso, por {esc(user.username, 80)}.', message.get('message_id'))
     prompt = db.get(TelegramPrompt, replied) if replied and chat == st.chat_id and text else None
     user = linked(db, sender) if prompt else None
     if prompt and user and user.id == prompt.user_id:
         try:review(db, prompt.analysis_id, user.id, prompt.verdict, text)
         except (LookupError, ValueError):return reply('No se pudo registrar: ese análisis ya no existe.', message.get('message_id'))
         db.delete(prompt)
-        return reply(f'{VERDICTS[prompt.verdict]} · valorado por {esc(user.username, 80)}. Corrección registrada: ODIN la tendrá en cuenta en los próximos casos.',
+        return reply(f'{VERDICTS[prompt.verdict]} · {esc(user.username, 80)}. Corrección registrada para los próximos análisis.',
                      message.get('message_id'))
     # A reply to a case thread (the case or its diagnosis) is a question about that case.
     thread = db.scalar(select(TelegramMessage).where(TelegramMessage.chat_id == chat, or_(TelegramMessage.message_id == replied,
@@ -364,6 +345,24 @@ def inbound(db, bot, st):
         db.commit()
 
 
+def deliver(db, bot, st):
+    """Level-1 reports (in the case's thread when there is one) and shift handovers queued for Telegram."""
+    from .models import CaseReport, ShiftReport
+    for row in reports.pending(db, CaseReport, 'telegram'):
+        case = db.get(Case, row.case_id);thread = db.get(TelegramMessage, row.case_id)
+        try:
+            sent = send(bot, st.chat_id, messages.telegram(messages.report(row, case, reports.author(db, row))),
+                        thread.message_id if thread else None, thread=st.thread_id)
+            reports.delivered(row, 'telegram', sent['message_id'])
+        except ConnectorError as exc:
+            reports.delivered(row, 'telegram', error=exc.code)
+        db.commit()
+    for row in reports.pending(db, ShiftReport, 'telegram'):
+        try:reports.delivered(row, 'telegram', send(bot, st.chat_id, messages.telegram(messages.shift(row)), thread=st.thread_id)['message_id'])
+        except ConnectorError as exc:reports.delivered(row, 'telegram', error=exc.code)
+        db.commit()
+
+
 def cycle():
     with session() as db:
         st = state(db);st.heartbeat_at = now();db.commit()
@@ -371,7 +370,7 @@ def cycle():
         if not bot:return
         try:
             inbound(db, bot, st)
-            if st.chat_id and not st.paused:outbound(db, bot, st)
+            if st.chat_id and not st.paused:outbound(db, bot, st);deliver(db, bot, st)
             if st.providers_chat_id and not st.paused:providers(db, bot, st)
             st.last_error = None
         except ConnectorError as exc:
@@ -386,12 +385,16 @@ def main():
     logging.getLogger('httpx').setLevel(logging.WARNING)
     signal.signal(signal.SIGTERM, lambda *_: stop.set())
     signal.signal(signal.SIGINT, lambda *_: stop.set())
+    from .noc import whatsapp
     while not stop.is_set():
-        try:
-            cycle()
-        except Exception:
-            logging.error('telegram_cycle_failed')
+        for name, step in (('telegram', cycle), ('whatsapp', whatsapp.cycle), ('shifts', shifts)):
+            try:step()
+            except Exception:logging.error('%s_cycle_failed', name)
         stop.wait(3)
+
+
+def shifts():
+    with session() as db:reports.tick(db)
 
 
 if __name__ == '__main__':

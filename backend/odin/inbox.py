@@ -62,6 +62,10 @@ def build(db, stamp=None):
     access = [c for c in db.scalars(select(Case).where(Case.kind == 'access', Case.state == 'active')) if c not in alerts]
     alerts += access
     covered = {c.detail.get('olt_id') for c in alerts if c.kind == 'access'}
+    # Level-1 reports: a case already reported (or acknowledged) is in progress; one past its deadline goes first.
+    from .noc.reports import status as report_status
+    reported = report_status(db, alerts, stamp)
+    handled = lambda c: c.acknowledged_at or reported[c.id]['reported_at']
     incidents = list(db.scalars(select(ProbeIncident).where(ProbeIncident.closed_at.is_(None)).order_by(ProbeIncident.opened_at)))
     recovered = list(db.scalars(select(ProbeIncident).where(ProbeIncident.closed_at >= since).order_by(ProbeIncident.closed_at.desc()).limit(LIMIT)))
     target_ids = {r.target_id for r in incidents + recovered}
@@ -90,7 +94,7 @@ def build(db, stamp=None):
     uplinks_down = [u for u in db.scalars(select(OltUplink).where(OltUplink.admin_status == 'Enabled'))
                     if u.status.lower() == 'down' and olts.get(u.olt_id) and olts[u.olt_id].present and u.olt_id not in covered]
 
-    attention = ([case_item(c) for c in alerts if not c.acknowledged_at]
+    attention = ([case_item(c, **reported[c.id]) for c in alerts if not handled(c)]
                  + [incident_item(r, names) for r in incidents if not r.acknowledged_at]
                  + [outage_item(o, olts) for o in outages]
                  + [item('olt', o.id, '#olt=' + o.id, 'critical', 'OLT inalcanzable', o.name, 'SmartOLT no llega a la OLT', o.last_seen)
@@ -106,8 +110,10 @@ def build(db, stamp=None):
     rank = {'critical': 0, 'warning': 1, 'info': 2}
     # The network first, then ODIN's own health (also in the status bar); within each level, confirmed customer impact
     # first and the most customers first, then the oldest problem.
-    attention.sort(key=lambda x: (rank.get(x['severity'], 3), x['kind'] == 'health', not x.get('confirmed'), -(x.get('onus') or 0), x['at'] or 0))
-    progress = ([case_item(c, acknowledged_by=acknowledgers.get(c.acknowledged_by), acknowledged_at=c.acknowledged_at) for c in alerts if c.acknowledged_at]
+    attention.sort(key=lambda x: (rank.get(x['severity'], 3), x['kind'] == 'health', not x.get('overdue'), not x.get('confirmed'),
+                                  -(x.get('onus') or 0), x['at'] or 0))
+    progress = ([case_item(c, acknowledged_by=acknowledgers.get(c.acknowledged_by), acknowledged_at=c.acknowledged_at, **reported[c.id])
+                 for c in alerts if handled(c)]
                 + [incident_item(r, names, acknowledged_by=acknowledgers.get(r.acknowledged_by), acknowledged_at=r.acknowledged_at)
                    for r in incidents if r.acknowledged_at]
                 + [item('analysis', a.id, '#caso=' + a.case_id, 'info', 'ODIN está analizando',
@@ -120,11 +126,15 @@ def build(db, stamp=None):
                 + [incident_item(r, names, kind='incident_recovered', closed_at=r.closed_at) for r in recovered]
                 + [outage_item(o, olts, kind='olt_outage_ended', closed_at=o.ended_at) for o in ended])
     resolved.sort(key=lambda x: -(x.get('closed_at') or 0))
-    counts = {'Casos': sum(1 for c in alerts if not c.acknowledged_at), 'Incidentes': sum(1 for r in incidents if not r.acknowledged_at),
+    counts = {'Casos': sum(1 for c in alerts if not handled(c)), 'Incidentes': sum(1 for r in incidents if not r.acknowledged_at),
               'OLTs': len(outages) + sum(1 for o in olts.values() if o.present and not o.reachable) + len(uplinks_down)}
     from .probes.verdict import compute as verdict
     from .probes.service import origin_view
-    return {'verdict': verdict(db, stamp=stamp, origin_healthy=origin_view(db, stamp)['state'] == 'healthy'), 'attention': attention[:LIMIT], 'progress': progress[:LIMIT], 'resolved': resolved[:LIMIT], 'counts': counts,
+    from .models import ShiftReport
+    shift = db.scalar(select(ShiftReport).order_by(ShiftReport.ends_at.desc()).limit(1))
+    return {'verdict': verdict(db, stamp=stamp, origin_healthy=origin_view(db, stamp)['state'] == 'healthy'),
+            'shift': {'kind': shift.kind, 'starts_at': shift.starts_at, 'ends_at': shift.ends_at, 'text': shift.text} if shift else None,
+            'attention': attention[:LIMIT], 'progress': progress[:LIMIT], 'resolved': resolved[:LIMIT], 'counts': counts,
             'health': components(checks), 'shift_hours': SHIFT // 3600, 'at': stamp}
 
 

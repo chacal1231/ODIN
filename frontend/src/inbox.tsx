@@ -1,5 +1,6 @@
 import { labels } from "./probes";
 import { Verdict } from "./monitoring";
+import { ShiftHandover } from "./noc";
 type Item = {
   kind: string; id: string; link: string | null; severity: string; title: string; where: string; detail: string; at: number | null;
   [key: string]: any;
@@ -44,6 +45,13 @@ function Row({ item, now, zone, onNavigate, children }: { item: Item; now: numbe
           {detail}
         </small>
         {item.impact && <small className={"inbox-impact" + (item.confirmed ? " confirmed" : "")}>👥 {item.impact}</small>}
+        {item.kind === "case" && (item.overdue || item.reported_at || item.escalated_at || item.escalate_due) && (
+          <small className="inbox-report">
+            {item.overdue && <span className="badge probe-status critical">Sin informar · plazo vencido</span>}
+            {item.reported_at && <span className="badge">Informado hace {ago(now - item.reported_at)}</span>}
+            {item.escalated_at ? <span className="badge">Escalado a N2</span> : item.escalate_due && <span className="badge probe-status warning">Corresponde escalar a N2</span>}
+          </small>
+        )}
         {children}
       </div>
       <span className="inbox-time" title={when(item.at, zone)}>{item.at ? ago(now - item.at) : ""}</span>
@@ -65,7 +73,7 @@ function Section({ title, hint, items, empty, children }: { title: string; hint?
 }
 
 /** What ODIN needs from the NOC now, what is in progress and what was resolved in the shift. */
-export function Inbox({ data, zone, onNavigate }: { data: any; zone: string; onNavigate: (page: string) => void }) {
+export function Inbox({ data, zone, onNavigate, api }: { data: any; zone: string; onNavigate: (page: string) => void; api: (path: string, method?: string, body?: unknown) => Promise<any> }) {
   if (!data) return <p className="muted">Consultando la bandeja…</p>;
   const now = data.at;
   return (
@@ -79,6 +87,7 @@ export function Inbox({ data, zone, onNavigate }: { data: any; zone: string; onN
         ))}
       </div>
       <Verdict verdict={data.verdict} />
+      <ShiftHandover api={api} zone={zone} latest={data.shift} />
       <Section title="Necesita de ti" items={data.attention} empty="Nada pendiente. Si algo cambia, aparece aquí primero."
         hint="Lo crítico primero; dentro de cada nivel, lo más antiguo.">
         {(i) => <Row key={i.kind + i.id} item={i} now={now} zone={zone} onNavigate={onNavigate} />}
