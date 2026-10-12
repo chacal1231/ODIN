@@ -21,6 +21,8 @@ class User(Base):
     role = Column(String(20), nullable=False, default='operator')
     active = Column(Boolean, nullable=False, default=True)
     must_change_password = Column(Boolean, nullable=False, default=True)
+    # Off for new accounts: an administrator turns it on per user. mfa_confirmed implies mfa_required.
+    mfa_required = Column(Boolean, nullable=False, default=False)
     mfa_secret = Column(Text)
     mfa_confirmed = Column(Boolean, nullable=False, default=False)
     last_totp_step = Column(BigInteger, nullable=False, default=-1)

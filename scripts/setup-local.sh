@@ -109,7 +109,10 @@ if [[ $start == [sS] ]]; then
   if (( first_install )); then admin_default=nocadmin; fi
   ask admin 'Administrador a crear (vacío para omitir)' "$admin_default" '^([a-z0-9._-]{3,80})?$'
   if [[ -n $admin ]]; then
-    if (( INTERACTIVE )); then compose exec api python -m odin.cli create-admin "$admin"
+    ask admin_mfa '¿Exigirle 2FA (autenticador TOTP)? Recomendado si el panel sale por WAN o dominio (s/n)' n '^[sSnN]$'
+    mfa_flag=()
+    if [[ $admin_mfa == [sS] ]]; then mfa_flag=(--mfa); fi
+    if (( INTERACTIVE )); then compose exec api python -m odin.cli create-admin "$admin" "${mfa_flag[@]}"
     else warn "crea el administrador desde una terminal: docker compose exec api python -m odin.cli create-admin $admin"; fi
   fi
 else

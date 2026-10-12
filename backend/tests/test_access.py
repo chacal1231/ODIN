@@ -15,10 +15,12 @@ def enroll(client, username='admin', password=PASSWORD):
     assert login.status_code == 200, login.text
     payload = login.json()
     client.headers['X-CSRF-Token'] = payload['csrf_token']
-    result = client.post('/api/v1/auth/mfa/verify', json={'code':pyotp.TOTP(payload['mfa_secret']).now(), 'new_password':NEW_PASSWORD})
+    secret = payload.get('mfa_secret')
+    code = {'code':pyotp.TOTP(secret).now()} if secret else {}
+    result = client.post('/api/v1/auth/mfa/verify', json={**code, 'new_password':NEW_PASSWORD})
     assert result.status_code == 200, result.text
     client.headers['X-CSRF-Token'] = result.json()['csrf_token']
-    return result.json(), payload['mfa_secret']
+    return result.json(), secret
 
 
 def test_mfa_required_and_password_change(client, administrator):
@@ -173,3 +175,76 @@ def test_branding_is_public_and_isp_name_is_bounded(client, monkeypatch):
     for bad in ('x' * 61, 'ISP\nfalso'):
         monkeypatch.setenv('ODIN_ISP_NAME', bad)
         with pytest.raises(ValueError):Settings()
+
+
+def other_client():
+    return TestClient(app, base_url='http://localhost:8080', headers={'Origin':'http://localhost:8080'})
+
+
+def test_new_accounts_start_without_mfa(client, administrator):
+    enroll(client)
+    created = client.post('/api/v1/admin/users', json={'username':'operador'}).json()
+    assert created['user']['mfa_required'] is False
+    with other_client() as other:
+        login = other.post('/api/v1/auth/login', json={'username':'operador','password':created['temporary_password']}).json()
+        assert login['password_change_required'] and not login['mfa_required'] and not login['enrollment_required']
+        assert 'mfa_secret' not in login
+        other.headers['X-CSRF-Token'] = login['csrf_token']
+        assert other.post('/api/v1/auth/mfa/verify', json={}).status_code == 422
+        result = other.post('/api/v1/auth/mfa/verify', json={'new_password':NEW_PASSWORD})
+        assert result.status_code == 200 and result.json()['recovery_codes'] == []
+        assert other.get('/api/v1/me').status_code == 200
+    with other_client() as other:
+        # Once the password is changed, it alone opens the session.
+        login = other.post('/api/v1/auth/login', json={'username':'operador','password':NEW_PASSWORD})
+        assert login.status_code == 200 and login.json()['user']['username'] == 'operador'
+        other.headers['X-CSRF-Token'] = login.json()['csrf_token']
+        assert other.get('/api/v1/me').status_code == 200
+        assert other.post('/api/v1/auth/recovery-codes', json={'password':NEW_PASSWORD,'code':'000000'}).status_code == 409
+    with session() as db:
+        user = db.scalar(select(User).where(User.username == 'operador'))
+        assert user.mfa_secret is None and not user.mfa_confirmed
+
+
+def test_admin_requires_and_removes_mfa(client, administrator):
+    enroll(client)
+    created = client.post('/api/v1/admin/users', json={'username':'operador'}).json()
+    user_id = created['user']['id']
+    with other_client() as other:
+        enroll(other, 'operador', created['temporary_password'])
+        assert client.post('/api/v1/admin/users/'+user_id+'/mfa', json={'required':True}).json()['mfa_required']
+        # Its session was opened without a second factor.
+        assert other.get('/api/v1/me').status_code == 401
+        login = other.post('/api/v1/auth/login', json={'username':'operador','password':NEW_PASSWORD}).json()
+        assert login['enrollment_required'] and login['mfa_secret']
+        other.headers['X-CSRF-Token'] = login['csrf_token']
+        assert other.post('/api/v1/auth/mfa/verify', json={}).status_code == 401
+        result = other.post('/api/v1/auth/mfa/verify', json={'code':pyotp.TOTP(login['mfa_secret']).now()})
+        assert result.status_code == 200 and len(result.json()['recovery_codes']) == 8
+    assert not client.post('/api/v1/admin/users/'+user_id+'/mfa', json={'required':False}).json()['mfa_required']
+    with session() as db:
+        user = db.get(User, user_id)
+        assert user.mfa_secret is None and not user.mfa_confirmed and user.recovery_hashes == []
+    with other_client() as other:
+        assert other.post('/api/v1/auth/login', json={'username':'operador','password':NEW_PASSWORD}).json()['user']
+    actions = [a['action'] for a in client.get('/api/v1/admin/audit').json()]
+    assert 'mfa_enabled' in actions and 'mfa_disabled' in actions
+    assert client.post('/api/v1/admin/users', json={'username':'con2fa','mfa_required':True}).json()['user']['mfa_required']
+
+
+def test_operator_cannot_change_mfa(client, administrator):
+    enroll(client)
+    created = client.post('/api/v1/admin/users', json={'username':'operador'}).json()
+    with other_client() as other:
+        enroll(other, 'operador', created['temporary_password'])
+        assert other.post('/api/v1/admin/users/'+administrator+'/mfa', json={'required':False}).status_code == 403
+
+
+def test_cli_admin_mfa_flag(monkeypatch):
+    from odin.cli import main
+    monkeypatch.setattr('getpass.getpass', lambda _: PASSWORD)
+    for argv in (['create-admin', 'sin2fa'], ['create-admin', 'con2fa', '--mfa']):
+        monkeypatch.setattr('sys.argv', ['odin.cli', *argv])
+        main()
+    with session() as db:
+        assert {u.username: u.mfa_required for u in db.scalars(select(User))} == {'sin2fa': False, 'con2fa': True}

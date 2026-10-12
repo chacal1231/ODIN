@@ -11,6 +11,7 @@ def main():
     parser = argparse.ArgumentParser(description='Administración local ODIN')
     parser.add_argument('action', choices=['create-admin', 'reset-access'])
     parser.add_argument('username')
+    parser.add_argument('--mfa', action='store_true', help='create-admin: exigir 2FA (TOTP) desde el primer ingreso')
     args = parser.parse_args()
     name = args.username.lower()
     if not re.fullmatch(r'[a-z0-9._-]{3,80}', name):
@@ -23,7 +24,7 @@ def main():
         if args.action == 'create-admin':
             if user:
                 parser.error('Usuario existente')
-            user = User(username=name, role='admin', password_hash=hasher.hash(password))
+            user = User(username=name, role='admin', password_hash=hasher.hash(password), mfa_required=args.mfa)
             db.add(user)
             db.flush()
         else:
@@ -38,8 +39,9 @@ def main():
             user.must_change_password = True
             user.active = True
         audit(db, 'local_' + args.action, target=user.id)
+        mfa = user.mfa_required
         db.commit()
-    print('Cuenta preparada. Debe cambiar contraseña y registrar MFA al ingresar.')
+    print('Cuenta preparada. Debe cambiar la contraseña al ingresar' + (' y registrar 2FA.' if mfa else '.'))
 
 
 if __name__ == '__main__':

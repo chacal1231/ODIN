@@ -36,7 +36,8 @@ def client():
 @pytest.fixture
 def administrator():
     with session() as db:
-        u = User(username='admin', role='admin', password_hash=hasher.hash(PASSWORD))
+        # With MFA, so the tests go through the full login.
+        u = User(username='admin', role='admin', password_hash=hasher.hash(PASSWORD), mfa_required=True)
         db.add(u)
         db.commit()
         return u.id

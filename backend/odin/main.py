@@ -59,7 +59,7 @@ def current(request: Request, db: Session = Depends(get_db)):
     if not auth or auth.expires_at <= stamp or auth.last_seen + settings().idle_seconds <= stamp:
         raise HTTPException(401, 'Sesión expirada o no válida')
     user = db.get(User, auth.user_id)
-    if not user or not user.active or not user.mfa_confirmed or user.must_change_password:
+    if not user or not user.active or (user.mfa_required and not user.mfa_confirmed) or user.must_change_password:
         raise HTTPException(401, 'Sesión no válida')
     if request.method not in ('GET', 'HEAD'):
         if not secrets.compare_digest(auth.csrf_hash, digest(request.headers.get('x-csrf-token', ''))):
@@ -78,7 +78,8 @@ def admin(user: User = Depends(current)):
 
 def user_view(user):
     return {'id': user.id, 'username': user.username, 'role': user.role, 'active': user.active,
-            'mfa_confirmed': user.mfa_confirmed, 'must_change_password': user.must_change_password}
+            'mfa_required': user.mfa_required, 'mfa_confirmed': user.mfa_confirmed,
+            'must_change_password': user.must_change_password}
 
 
 class LoginBody(BaseModel):
@@ -87,13 +88,15 @@ class LoginBody(BaseModel):
 
 
 class VerifyBody(BaseModel):
-    code: str = Field(min_length=6, max_length=64)
+    # Only for accounts with MFA.
+    code: str | None = Field(default=None, min_length=6, max_length=64)
     new_password: str | None = Field(default=None, min_length=14, max_length=256)
 
 
 class CreateUserBody(BaseModel):
     username: str = Field(min_length=3, max_length=80, pattern=r'^[a-zA-Z0-9._-]+$')
     role: str = 'operator'
+    mfa_required: bool = False
 
     @field_validator('role')
     @classmethod
@@ -101,6 +104,10 @@ class CreateUserBody(BaseModel):
         if value not in ('admin', 'operator'):
             raise ValueError('Rol no válido')
         return value
+
+
+class MfaBody(BaseModel):
+    required: bool
 
 
 class RecoveryBody(BaseModel):
@@ -153,6 +160,19 @@ def ready(db: Session = Depends(get_db)):
         raise HTTPException(503, 'Persistencia no disponible')
 
 
+def start_session(db, user, response, codes=()):
+    # No preauthentication challenge survives the login.
+    db.execute(delete(Challenge).where(Challenge.user_id == user.id))
+    raw = token()
+    csrf = digest('csrf:' + raw)
+    db.add(AuthSession(token_hash=digest(raw), user_id=user.id, csrf_hash=digest(csrf), expires_at=now() + settings().session_seconds))
+    audit(db, 'login_success', user.id)
+    db.commit()
+    response.delete_cookie(CHALLENGE, path='/api')
+    set_cookie(response, COOKIE, raw, settings().session_seconds)
+    return {'user': user_view(user), 'csrf_token': csrf, 'recovery_codes': list(codes)}
+
+
 @app.post('/api/v1/auth/login')
 def login(body: LoginBody, request: Request, response: Response, db: Session = Depends(get_db)):
     username = body.username.lower().strip()
@@ -165,7 +185,10 @@ def login(body: LoginBody, request: Request, response: Response, db: Session = D
         audit(db, 'login_failed')
         db.commit()
         raise HTTPException(401, 'Credenciales no válidas')
-    if not user.mfa_secret:
+    if not user.mfa_required and not user.must_change_password:
+        # Nothing else to prove: the password opens the session.
+        return start_session(db, user, response)
+    if user.mfa_required and not user.mfa_secret:
         user.mfa_secret = encrypt(pyotp.random_base32())
     db.execute(delete(Challenge).where(Challenge.user_id == user.id))
     challenge, csrf = token(), token()
@@ -173,9 +196,9 @@ def login(body: LoginBody, request: Request, response: Response, db: Session = D
     audit(db, 'login_password_verified', user.id)
     db.commit()
     set_cookie(response, CHALLENGE, challenge, 300)
-    result = {'csrf_token': csrf, 'enrollment_required': not user.mfa_confirmed,
+    result = {'csrf_token': csrf, 'mfa_required': user.mfa_required, 'enrollment_required': user.mfa_required and not user.mfa_confirmed,
               'password_change_required': user.must_change_password}
-    if not user.mfa_confirmed:
+    if result['enrollment_required']:
         secret = decrypt(user.mfa_secret)
         result['mfa_secret'] = secret
         result['provisioning_uri'] = pyotp.TOTP(secret).provisioning_uri(user.username, issuer_name='ODIN')
@@ -196,27 +219,19 @@ def verify(body: VerifyBody, request: Request, response: Response, db: Session =
     if user.must_change_password and (not body.new_password or verify_password(user.password_hash, body.new_password)):
         raise HTTPException(422, 'Define una contraseña nueva de al menos 14 caracteres')
     challenge.attempts += 1
-    if not consume_mfa(user, body.code.strip()):
-        audit(db, 'mfa_failed', user.id)
-        db.commit()
-        raise HTTPException(401, 'Código no válido o ya utilizado')
     codes = []
-    if not user.mfa_confirmed:
-        codes = new_recovery_codes(user)
-        user.mfa_confirmed = True
+    if user.mfa_required:
+        if not body.code or not consume_mfa(user, body.code.strip()):
+            audit(db, 'mfa_failed', user.id)
+            db.commit()
+            raise HTTPException(401, 'Código no válido o ya utilizado')
+        if not user.mfa_confirmed:
+            codes = new_recovery_codes(user)
+            user.mfa_confirmed = True
     if user.must_change_password:
         user.password_hash = hasher.hash(body.new_password)
         user.must_change_password = False
-    # Prevent another preauthentication challenge from surviving enrollment.
-    db.execute(delete(Challenge).where(Challenge.user_id == user.id))
-    raw = token()
-    csrf = digest('csrf:' + raw)
-    db.add(AuthSession(token_hash=digest(raw), user_id=user.id, csrf_hash=digest(csrf), expires_at=now() + settings().session_seconds))
-    audit(db, 'login_success', user.id)
-    db.commit()
-    response.delete_cookie(CHALLENGE, path='/api')
-    set_cookie(response, COOKIE, raw, settings().session_seconds)
-    return {'user': user_view(user), 'csrf_token': csrf, 'recovery_codes': codes}
+    return start_session(db, user, response, codes)
 
 
 @app.get('/api/v1/me')
@@ -239,6 +254,8 @@ def logout(request: Request, response: Response, user: User = Depends(current), 
 def recovery(body: RecoveryBody, user: User = Depends(current), db: Session = Depends(get_db)):
     rate_limit(db, 'recovery:' + user.id, 5)
     user = db.scalar(select(User).where(User.id == user.id).with_for_update())
+    if not user.mfa_required:
+        raise HTTPException(409, 'Tu cuenta no tiene 2FA activado')
     if not verify_password(user.password_hash, body.password) or not consume_mfa(user, body.code):
         db.commit()
         raise HTTPException(401, 'Verificación no válida')
@@ -290,7 +307,7 @@ def create_user(body: CreateUserBody, user: User = Depends(admin), db: Session =
     if db.scalar(select(User).where(User.username == name)):
         raise HTTPException(409, 'El usuario ya existe')
     password = token()
-    created = User(username=name, role=body.role, password_hash=hasher.hash(password))
+    created = User(username=name, role=body.role, password_hash=hasher.hash(password), mfa_required=body.mfa_required)
     db.add(created)
     db.flush()
     audit(db, 'user_created', user.id, created.id)
@@ -306,6 +323,23 @@ def revoke_sessions(user_id: str, user: User = Depends(admin), db: Session = Dep
     audit(db, 'sessions_revoked', user.id, user_id)
     db.commit()
     return {'ok': True}
+
+
+@app.post('/api/v1/admin/users/{user_id}/mfa')
+def set_mfa(user_id: str, body: MfaBody, user: User = Depends(admin), db: Session = Depends(get_db)):
+    target = db.scalar(select(User).where(User.id == user_id).with_for_update())
+    if not target:
+        raise HTTPException(404, 'Usuario no encontrado')
+    if target.mfa_required != body.required:
+        target.mfa_required = body.required
+        if body.required:
+            # Open sessions were started without a second factor: the next login enrolls it.
+            revoke(db, user_id)
+        else:
+            target.mfa_secret, target.mfa_confirmed, target.recovery_hashes = None, False, []
+        audit(db, 'mfa_enabled' if body.required else 'mfa_disabled', user.id, user_id)
+    db.commit()
+    return user_view(target)
 
 
 @app.post('/api/v1/admin/users/{user_id}/deactivate')

@@ -52,7 +52,9 @@ docker compose up --build -d
 docker compose exec api python -m odin.cli create-admin nocadmin
 ```
 
-La CLI pide una contraseña temporal sin mostrarla. En el primer ingreso se exige una contraseña nueva de al menos 14 caracteres y el registro de MFA en un autenticador TOTP (código QR o clave), y se muestran ocho códigos de recuperación. No existen usuarios ni contraseñas predeterminadas.
+La CLI pide una contraseña temporal sin mostrarla. En el primer ingreso se exige una contraseña nueva de al menos 14 caracteres. No existen usuarios ni contraseñas predeterminadas.
+
+Las cuentas nuevas no tienen 2FA. Se exige por usuario: con `create-admin --mfa`, con la casilla *Exigir 2FA* al crear el usuario o con *Exigir 2FA* en **Administración**. Esa cuenta registra un autenticador TOTP (código QR o clave) en su siguiente ingreso y recibe ocho códigos de recuperación. Conviene exigirlo al menos a los administradores, y siempre que el panel se publique por WAN o con dominio.
 
 El script ofrece tres formas de publicar el panel. Guarda la elegida en `COMPOSE_FILE` dentro de `.env`, así que `docker compose` la usa sin repetir los `-f`:
 
@@ -78,13 +80,13 @@ Los catálogos de servicios externos se cargan y activan solos al arrancar. Conv
 - **Administrador**: usuarios, fuentes, organización del monitoreo, guías, WhatsApp, turnos y umbrales.
 - **Operador**: consulta todo, reconoce casos e incidentes, informa al grupo del NOC y escala a N2.
 
-MFA acepta un código TOTP o un código de recuperación de un solo uso. Los códigos se renuevan desde *Mi acceso* (con contraseña y factor válido), lo que invalida todos los anteriores. Si se pierde el acceso, la recuperación se hace desde el host:
+Con 2FA, el ingreso acepta un código TOTP o un código de recuperación de un solo uso. Los códigos se renuevan desde *Mi acceso* (con contraseña y factor válido), lo que invalida todos los anteriores. Si se pierde el acceso, la recuperación se hace desde el host:
 
 ```bash
 docker compose exec api python -m odin.cli reset-access nombre_usuario
 ```
 
-Esto revoca las sesiones, borra el MFA y exige una contraseña nueva y un registro de MFA nuevo al ingresar. No hay recuperación por email. ODIN no deja desactivar la propia cuenta y siempre conserva al menos un administrador activo.
+Esto revoca las sesiones, borra el autenticador y exige una contraseña nueva al ingresar, y un registro nuevo de 2FA si la cuenta lo tiene exigido. Exigir 2FA desde **Administración** también cierra las sesiones abiertas de ese usuario; quitarlo borra su autenticador y sus códigos. No hay recuperación por email. ODIN no deja desactivar la propia cuenta y siempre conserva al menos un administrador activo.
 
 ## Analista
 

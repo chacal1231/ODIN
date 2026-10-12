@@ -19,10 +19,12 @@ type User = {
   username: string;
   role: string;
   active: boolean;
+  mfa_required: boolean;
   mfa_confirmed: boolean;
 };
 type Challenge = {
   csrf_token: string;
+  mfa_required: boolean;
   enrollment_required: boolean;
   password_change_required: boolean;
   mfa_secret?: string;
@@ -189,15 +191,16 @@ function App() {
     const f = new FormData(e.currentTarget);
     try {
       if (!challenge) {
-        setChallenge(
-          await api("/auth/login", "POST", {
-            username: f.get("username"),
-            password: f.get("password"),
-          }),
-        );
+        const x = await api("/auth/login", "POST", {
+          username: f.get("username"),
+          password: f.get("password"),
+        });
+        // Without 2FA or a pending password change, the password alone opens the session.
+        if (x.user) setUser(x.user);
+        else setChallenge(x);
       } else {
         const x = await api("/auth/mfa/verify", "POST", {
-          code: f.get("code"),
+          code: challenge.mfa_required ? f.get("code") : undefined,
           new_password: challenge.password_change_required
             ? f.get("new_password")
             : undefined,
@@ -224,8 +227,14 @@ function App() {
             <ThemePicker theme={theme} onChange={setTheme} />
           </div>
           <Brand isp={isp} />
-          <h2>{challenge ? "Verifica tu identidad" : "Iniciar sesión"}</h2>
-          {challenge && (
+          <h2>
+            {!challenge
+              ? "Iniciar sesión"
+              : challenge.mfa_required
+                ? "Verifica tu identidad"
+                : "Cambia tu contraseña"}
+          </h2>
+          {challenge?.mfa_required && (
             <p className="muted">
               Introduce el código de tu autenticador o un código de
               recuperación.
@@ -288,15 +297,17 @@ function App() {
                     />
                   </label>
                 )}
-                <label>
-                  Código de verificación
-                  <input
-                    name="code"
-                    autoComplete="one-time-code"
-                    required
-                    maxLength={64}
-                  />
-                </label>
+                {challenge.mfa_required && (
+                  <label>
+                    Código de verificación
+                    <input
+                      name="code"
+                      autoComplete="one-time-code"
+                      required
+                      maxLength={64}
+                    />
+                  </label>
+                )}
               </>
             )}
             <button disabled={busy}>
@@ -535,7 +546,7 @@ function App() {
               onGo: go,
             }} />
           ) : page === "Mi acceso" ? (
-            <Recovery onError={setError} onCodes={setCodes} />
+            <Recovery mfa={user.mfa_required} onError={setError} onCodes={setCodes} />
           ) : page === "Comunicación NOC" ? (
             <NocCommunication api={api} onError={setError} />
           ) : page === "Administración" ? (
@@ -566,6 +577,7 @@ function Admin({
       { id: string; action: string; created_at: number }[]
     >([]),
     [temporary, setTemporary] = useState(""),
+    [temporaryMfa, setTemporaryMfa] = useState(false),
     [busy, setBusy] = useState(false);
   async function refresh() {
     setUsers(await api("/admin/users"));
@@ -600,8 +612,10 @@ function Admin({
                 const x = await api("/admin/users", "POST", {
                   username: f.get("username"),
                   role: f.get("role"),
+                  mfa_required: f.get("mfa_required") === "on",
                 });
                 setTemporary(x.temporary_password);
+                setTemporaryMfa(x.user.mfa_required);
               });
             }}
           >
@@ -616,13 +630,16 @@ function Admin({
                 <option value="admin">Administrador</option>
               </select>
             </label>
+            <label className="checkbox-label">
+              <input type="checkbox" name="mfa_required" /> Exigir 2FA (autenticador TOTP)
+            </label>
             <button disabled={busy}>Crear usuario</button>
           </form>
           {temporary && (
             <div className="notice">
               <p>
                 Entrega esta contraseña temporal por un canal seguro. Se exigirá
-                cambiarla y registrar MFA.
+                cambiarla{temporaryMfa ? " y registrar el 2FA" : ""} en el primer ingreso.
               </p>
               <code className="secret">{temporary}</code>
               <button className="quiet" onClick={() => setTemporary("")}>
@@ -635,8 +652,33 @@ function Admin({
               <div key={u.id}>
                 <strong>{u.username}</strong>
                 <small>
-                  {u.role} · {u.active ? "Activo" : "Desactivado"}
+                  {u.role} · {u.active ? "Activo" : "Desactivado"} ·{" "}
+                  {!u.mfa_required
+                    ? "Sin 2FA"
+                    : u.mfa_confirmed
+                      ? "2FA activo"
+                      : "2FA pendiente de registro"}
                 </small>
+                <button
+                  disabled={busy}
+                  className="quiet"
+                  onClick={() => {
+                    if (
+                      confirm(
+                        u.mfa_required
+                          ? "¿Quitar el 2FA a " + u.username + "? Se borra su autenticador y sus códigos de recuperación."
+                          : "¿Exigir 2FA a " + u.username + "? Se cierran sus sesiones y registrará el autenticador al ingresar.",
+                      )
+                    )
+                      void run(async () => {
+                        await api("/admin/users/" + u.id + "/mfa", "POST", {
+                          required: !u.mfa_required,
+                        });
+                      });
+                  }}
+                >
+                  {u.mfa_required ? "Quitar 2FA" : "Exigir 2FA"}
+                </button>
                 <button
                   disabled={busy}
                   className="quiet"
@@ -700,9 +742,11 @@ function Admin({
 }
 
 function Recovery({
+  mfa,
   onError,
   onCodes,
 }: {
+  mfa: boolean;
   onError: (s: string) => void;
   onCodes: (c: string[]) => void;
 }) {
@@ -710,6 +754,7 @@ function Recovery({
   return (
     <section className="panel">
       <h1>Mi acceso</h1>
+      {mfa ? <>
       <h2>Renovar códigos de recuperación</h2>
       <p className="muted">Los códigos anteriores dejarán de funcionar.</p>
       <form
@@ -748,6 +793,11 @@ function Recovery({
         </label>
         <button disabled={busy}>Renovar códigos</button>
       </form>
+      </> : (
+        <p className="muted">
+          Tu cuenta no tiene 2FA. Un administrador puede exigirlo desde Administración.
+        </p>
+      )}
       <TelegramLink onError={onError} />
     </section>
   );
