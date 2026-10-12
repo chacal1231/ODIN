@@ -11,6 +11,7 @@ from .events.collector import schedule as schedule_events, execute as execute_ev
 from .cases.service import schedule as schedule_cases, execute as execute_cases
 from .analyst.service import KINDS as ANALYST_KINDS
 from .olts.service import schedule as schedule_olts, execute as execute_olts
+from .probes.baseline import schedule as schedule_baselines, execute as execute_baselines
 
 stop = threading.Event()
 
@@ -31,6 +32,7 @@ def main():
                 schedule_events(db)
                 schedule_cases(db)
                 schedule_olts(db)
+                schedule_baselines(db)
                 # Model runs take minutes: the analyst process owns them.
                 job = claim(db, exclude=ANALYST_KINDS)
                 if job:
@@ -42,6 +44,8 @@ def main():
                         execute_cases(job.id, job.lease_token)
                     elif job.kind == 'smartolt_poll':
                         execute_olts(job.id, job.lease_token)
+                    elif job.kind == 'probe_baselines':
+                        execute_baselines(job.id, job.lease_token)
                     elif job.kind == 'event_index':
                         execute_index(job.id, job.lease_token)
                     elif job.kind == 'healthcheck':

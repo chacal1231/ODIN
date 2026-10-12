@@ -3,7 +3,7 @@ import math
 from copy import deepcopy
 from sqlalchemy import select
 from ..models import ProbeRound, ProbeState, ProbeIncident, ProbeIncidentEvent, now
-from . import trace
+from . import trace, baseline
 
 
 def window_metrics(rounds, config, slot, warm_since):
@@ -82,7 +82,8 @@ def evaluate(db,target,series,round_row,maintenance=False):
         state=ProbeState(target_id=target.id,address=series.address,conditions={},counters={},metrics={})
         db.add(state);db.flush()
     if state.series_id==series.id and state.last_slot is not None and state.last_slot>=round_row.slot:return
-    config=series.config;slot=round_row.slot;interval=config['interval_seconds']
+    # Adaptive thresholds and damping are overlaid here, so applying them never restarts the series.
+    config=baseline.overlay(target,series.config,round_row.slot);slot=round_row.slot;interval=config['interval_seconds']
     gap=state.series_id!=series.id or state.last_slot is None or state.last_slot+interval!=slot
     previous_warm=state.counters.get('warm_since',series.started_at) if state.series_id==series.id else series.started_at
     counters={} if gap else dict(state.counters)

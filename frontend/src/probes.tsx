@@ -331,6 +331,14 @@ export function Destinations({
         .toLowerCase()
         .includes(filter.toLowerCase()),
   );
+  const pending = targets.filter(
+    (t) =>
+      t.threshold_mode === "proposed" &&
+      t.baseline &&
+      t.baseline.status !== "insufficient" &&
+      !t.baseline.applied_at &&
+      Object.keys(t.baseline.proposal || {}).length,
+  ).length;
   return (
     <>
       <div className="title-row">
@@ -342,6 +350,36 @@ export function Destinations({
           Nuevo destino
         </button>
       </div>
+      {admin && (
+        <div className="probe-actions">
+          <small>
+            Umbrales adaptativos: {pending} propuesta{pending === 1 ? "" : "s"}{" "}
+            pendiente{pending === 1 ? "" : "s"} de aprobación
+          </small>
+          <button
+            className="secondary"
+            disabled={busy || !pending}
+            onClick={() =>
+              void run(async () => {
+                await api("/baselines/apply-proposals", "POST");
+              })
+            }
+          >
+            Aprobar todas las propuestas
+          </button>
+          <button
+            className="quiet"
+            disabled={busy}
+            onClick={() =>
+              void run(async () => {
+                await api("/baselines/recompute", "POST");
+              })
+            }
+          >
+            Recalcular líneas base
+          </button>
+        </div>
+      )}
       <p className="probe-origin">
         Origen: ODIN <ProbeBadge state={origin?.state || "no_data"} />
         {origin?.error_code && (
@@ -1068,6 +1106,7 @@ export function Destinations({
           onError={onError}
           zone={zone}
           onClose={() => setSelected(null)}
+          onChanged={load}
         />
         </Drawer>
       )}
@@ -1307,6 +1346,171 @@ function Plot({
     </figure>
   );
 }
+/** The threshold the detector evaluates: an applied adaptive one unless the check is manual. */
+function applied(target: any, config: any, key: string) {
+  const a = target?.adaptive || {};
+  if (
+    target?.threshold_mode !== "manual" &&
+    a.thresholds?.[key] != null &&
+    a.protocol === (config?.protocol || target?.protocol || "icmp")
+  )
+    return a.thresholds[key];
+  return config?.[key];
+}
+const baselineStates: Record<string, string> = {
+  insufficient: "Sin datos suficientes",
+  provisional: "Provisional (menos de 7 días o cobertura baja)",
+  ready: "Lista (7 días de historial)",
+};
+const baselineFlags: Record<string, string> = {
+  lossy: "La base tiene pérdida: revisa el destino; la pérdida no se adapta",
+  above_ceiling: "La base supera el techo de su categoría: el destino es lento por sí mismo",
+  step_limited: "Cambio limitado al 25 % respecto de lo aplicado",
+};
+const thresholdRows: [string, string][] = [
+  ["rtt_warning", "Latencia p95 · advertencia"],
+  ["rtt_critical", "Latencia p95 · crítico"],
+  ["jitter_warning", "Jitter · advertencia"],
+  ["jitter_critical", "Jitter · crítico"],
+];
+function AdaptiveThresholds({
+  target,
+  api,
+  admin,
+  zone,
+  onError,
+  onChanged,
+}: Props & { target: any; onChanged: () => Promise<void> }) {
+  const [busy, setBusy] = useState(false);
+  const b = target.baseline,
+    a = target.adaptive || {},
+    m = b?.metrics || {};
+  async function run(fn: () => Promise<void>) {
+    setBusy(true);
+    onError("");
+    try {
+      await fn();
+      await onChanged();
+    } catch (e) {
+      onError(message(e));
+    } finally {
+      setBusy(false);
+    }
+  }
+  const proposal = b?.proposal || {};
+  return (
+    <details className="probe-adaptive" open={target.threshold_mode !== "manual"}>
+      <summary>Umbrales adaptativos</summary>
+      <div className="probe-actions">
+        <label>
+          Modo
+          <select
+            disabled={!admin || busy}
+            value={target.threshold_mode}
+            onChange={(e) =>
+              void run(async () => {
+                await api(`/targets/${target.id}/threshold-mode`, "PUT", {
+                  mode: e.target.value,
+                });
+              })
+            }
+          >
+            <option value="manual">Manual: umbrales del perfil</option>
+            <option value="proposed">Propuesto: un administrador aprueba</option>
+            <option value="auto">Automático: ajuste semanal</option>
+          </select>
+        </label>
+        {admin &&
+          target.threshold_mode !== "manual" &&
+          b &&
+          b.status !== "insufficient" &&
+          !b.applied_at &&
+          Object.keys(proposal).length > 0 && (
+            <button
+              className="secondary"
+              disabled={busy}
+              onClick={() =>
+                void run(async () => {
+                  await api(`/targets/${target.id}/baselines/${b.id}/apply`, "POST");
+                })
+              }
+            >
+              Aplicar propuesta
+            </button>
+          )}
+      </div>
+      {!b ? (
+        <p className="muted">
+          Aún sin línea base. Se calcula cada día con el historial disponible
+          (hasta 7 días); la propuesta aparece con 24 h de mediciones.
+        </p>
+      ) : (
+        <>
+          <p className="muted">
+            {baselineStates[b.status] || b.status} · calculada{" "}
+            {when(b.computed_at, zone)} · {fmt(b.days)} días · cobertura{" "}
+            {fmt(b.coverage * 100, 0)} % · {b.windows} ventanas de 5 min
+            {m.base_p95 != null && (
+              <>
+                <br />
+                Base p95 {fmt(m.base_p95)} ms (dispersión {fmt(m.mad)} ms)
+                {m.jitter_base != null && <> · jitter {fmt(m.jitter_base)} ms</>}
+                {m.loss_percent != null && <> · pérdida {fmt(m.loss_percent)} %</>}
+                {m.peak_p95 != null && m.valley_p95 != null && (
+                  <>
+                    {" "}
+                    · pico 19–23 h {fmt(m.peak_p95)} ms vs. madrugada{" "}
+                    {fmt(m.valley_p95)} ms
+                  </>
+                )}
+              </>
+            )}
+          </p>
+          {(b.flags || []).map((f: string) => (
+            <p key={f} className="notice">
+              {baselineFlags[f] || f}
+            </p>
+          ))}
+          <div className="probe-table">
+            <table>
+              <thead>
+                <tr>
+                  <th>Umbral (ms)</th>
+                  <th>Perfil</th>
+                  <th>Aplicado</th>
+                  <th>Propuesto</th>
+                </tr>
+              </thead>
+              <tbody>
+                {thresholdRows.map(([key, label]) => (
+                  <tr key={key}>
+                    <td>{label}</td>
+                    <td>{target.effective?.[key] ?? "—"}</td>
+                    <td>{a.thresholds?.[key] ?? "—"}</td>
+                    <td>{proposal[key] ?? "—"}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+          {a.applied_at && (
+            <small>
+              Aplicado {when(a.applied_at, zone)} ·{" "}
+              {a.applied_by === "auto" ? "automático" : "aprobado por un administrador"}
+            </small>
+          )}
+        </>
+      )}
+      {a.damping && a.damping.until * 1000 > Date.now() && (
+        <p className="notice">
+          Oscilaciones: {a.damping.short_incidents} incidentes cortos en 24 h.
+          Persistencia aumentada a {a.damping.persistence} evaluaciones hasta{" "}
+          {when(a.damping.until, zone)}.
+        </p>
+      )}
+    </details>
+  );
+}
 function TargetDetail({
   id,
   target,
@@ -1315,7 +1519,8 @@ function TargetDetail({
   onError,
   zone,
   onClose,
-}: Props & { id: string; target: any; onClose: () => void }) {
+  onChanged,
+}: Props & { id: string; target: any; onClose: () => void; onChanged: () => Promise<void> }) {
   const [hours, setHours] = useState(1),
     [data, setData] = useState<any>(null),
     [seriesId, setSeriesId] = useState(""),
@@ -1443,6 +1648,16 @@ function TargetDetail({
           </button>
         )}
       </div>
+      {target && (
+        <AdaptiveThresholds
+          target={target}
+          api={api}
+          admin={admin}
+          zone={zone}
+          onError={onError}
+          onChanged={onChanged}
+        />
+      )}
       {data?.truncated && (
         <p className="notice">
           Se muestran las 20 series más recientes. Reduce el periodo para
@@ -1456,8 +1671,8 @@ function TargetDetail({
         unit="ms"
         zone={zone}
         thresholds={[
-          series?.config.rtt_warning,
-          series?.config.rtt_critical,
+          applied(target, series?.config, "rtt_warning"),
+          applied(target, series?.config, "rtt_critical"),
         ].filter((x) => x != null)}
         maintenance={maintenance}
       />

@@ -18,6 +18,8 @@ class Settings(BaseSettings):
     probe_concurrency: int = 32
     probe_max_addresses: int = 384
     trace_concurrency: int = 8
+    # Local time for the evening peak of adaptive baselines.
+    timezone: str = 'America/Bogota'
     idle_seconds: int = 1800
     session_seconds: int = 43200
 

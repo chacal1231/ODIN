@@ -258,6 +258,29 @@ class ProbeTarget(Base):
     resolved_ips = Column(JSON, nullable=False, default=list)
     resolved_at = Column(BigInteger)
     last_error = Column(String(80))
+    # manual: profile thresholds only; proposed: baselines are approved by an administrator; auto: applied weekly.
+    threshold_mode = Column(String(10), nullable=False, default='proposed')
+    # Applied adaptive thresholds and flap damping; the detector overlays them on the series config.
+    adaptive = Column(JSON, nullable=False, default=dict)
+
+
+class ProbeBaseline(Base):
+    """One computation of a check's normal behaviour and the thresholds it proposes."""
+    __tablename__ = 'probe_baselines'
+    id = Column(String(36), primary_key=True, default=uid)
+    target_id = Column(ForeignKey('probe_targets.id'), nullable=False)
+    computed_at = Column(BigInteger, nullable=False)
+    protocol = Column(String(10), nullable=False)
+    status = Column(String(20), nullable=False)
+    days = Column(Float, nullable=False)
+    coverage = Column(Float, nullable=False)
+    windows = Column(Integer, nullable=False)
+    metrics = Column(JSON, nullable=False)
+    proposal = Column(JSON, nullable=False)
+    flags = Column(JSON, nullable=False)
+    applied_at = Column(BigInteger)
+    applied_by = Column(String(36))
+    __table_args__ = (Index('ix_probe_baselines_target', 'target_id', 'computed_at'),)
 
 
 class ProbeBatch(Base):

@@ -114,6 +114,8 @@ def target_views(db, targets, stamp=None):
         incidents.setdefault(i.target_id,[]).append(i)
     maintenance_ids=set(db.scalars(select(ProbeMaintenance.target_id).where(ProbeMaintenance.target_id.in_(ids),
         ProbeMaintenance.cancelled.is_(False),ProbeMaintenance.starts_at<=stamp,ProbeMaintenance.ends_at>stamp)))
+    from .baseline import latest
+    baselines=latest(db,ids) if ids else {}
     result=[]
     for target in targets:
         measurements=[]
@@ -131,10 +133,17 @@ def target_views(db, targets, stamp=None):
         else:status='healthy'
         active=incidents.get(target.id,[])
         result.append({**{key:getattr(target,key) for key in ('id','name','address','family','pop_id','description',
-            'destination_id','essential','protocol','check_config','dns_policy','catalog_metadata','validation','categories','service','profile_version_id','overrides','effective','approved_ips','enabled','archived','version','epoch','resolved_ips','resolved_at','last_error')},
+            'destination_id','essential','protocol','check_config','dns_policy','catalog_metadata','validation','categories','service','profile_version_id','overrides','effective','approved_ips','enabled','archived','version','epoch','resolved_ips','resolved_at','last_error','threshold_mode','adaptive')},
+            'baseline':baseline_view(baselines.get(target.id)),
             'state':status,'measurements':measurements,'active_incidents':len(active),
             'incident_severity':'critical' if any(i.severity=='critical' for i in active) else 'warning' if active else None})
     return result
+
+
+def baseline_view(row):
+    if not row:return None
+    return {key:getattr(row,key) for key in ('id','computed_at','protocol','status','days','coverage','windows','metrics','proposal','flags',
+                                             'applied_at','applied_by')}
 
 
 def snapshot(target):

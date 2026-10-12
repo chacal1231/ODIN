@@ -7,15 +7,16 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 from ..db import get_db
 from ..models import (Pop, ProbeProfile, ProbeProfileVersion, ProbeTarget, ProbeBatch, ProbeSeries,
-    ProbeRound, ProbeRollup, ProbeIncident, ProbeIncidentEvent, ProbeMaintenance, ProbeTrace, MonitoringDestination, Device, InventoryLink, CaseEvidence, now, uid)
+    ProbeRound, ProbeRollup, ProbeIncident, ProbeIncidentEvent, ProbeMaintenance, ProbeTrace, MonitoringDestination, Device, InventoryLink, CaseEvidence,
+    ProbeBaseline, now, uid)
 from ..security import audit, rate_limit
 from .config import TransportConfig, measurement_config, ProbeConfig, DEFAULT_PROFILE_ID, DEFAULT_VERSION_ID, host, safe_ip, seed_defaults
 from .resolver import resolve, ProbeError
-from .service import lock, effective, capacity, changed, next_slot, origin_view, target_views, snapshot
+from .service import lock, effective, capacity, changed, next_slot, origin_view, target_views, snapshot, baseline_view
 from .catalog import CATEGORIES, CATEGORY_IDS
 from .organization import ensure_destination, overview as monitoring_overview
 from .detector import window_metrics, record_configuration
-from . import trace
+from . import trace, baseline
 
 
 class TargetBody(BaseModel):
@@ -88,6 +89,10 @@ class ProfileBody(BaseModel):
 
 class VersionBody(BaseModel):
     version: int
+
+
+class ThresholdModeBody(BaseModel):
+    mode: str = Field(pattern='^(manual|proposed|auto)$')
 
 
 class MaintenanceBody(BaseModel):
@@ -272,6 +277,48 @@ def router(current,admin):
         if not row or row.version!=body.version:raise HTTPException(409,'Actualiza el destino')
         row.archived=True;row.enabled=False;row.version+=1;changed(db,row,'target_archived')
         audit(db,'probe_target_archived',user.id,row.id);db.commit();return {'ok':True}
+
+    @api.put('/targets/{target_id}/threshold-mode')
+    def threshold_mode(target_id:str,body:ThresholdModeBody,user=Depends(admin),db:Session=Depends(get_db)):
+        row=db.scalar(select(ProbeTarget).where(ProbeTarget.id==target_id,ProbeTarget.archived.is_(False)).with_for_update())
+        if not row:raise HTTPException(404,'Destino no encontrado')
+        # Not a measurement change: neither the version nor the series move.
+        row.threshold_mode=body.mode;audit(db,'probe_threshold_mode_'+body.mode,user.id,row.id);db.commit()
+        return target_views(db,[row])[0]
+
+    @api.get('/targets/{target_id}/baselines')
+    def baselines(target_id:str,user=Depends(current),db:Session=Depends(get_db)):
+        if not db.get(ProbeTarget,target_id):raise HTTPException(404,'Destino no encontrado')
+        rows=db.scalars(select(ProbeBaseline).where(ProbeBaseline.target_id==target_id).order_by(ProbeBaseline.computed_at.desc()).limit(30))
+        return [baseline_view(r) for r in rows]
+
+    @api.post('/targets/{target_id}/baselines/{baseline_id}/apply')
+    def apply_baseline(target_id:str,baseline_id:str,user=Depends(admin),db:Session=Depends(get_db)):
+        row=db.scalar(select(ProbeTarget).where(ProbeTarget.id==target_id,ProbeTarget.archived.is_(False)).with_for_update())
+        proposal=db.get(ProbeBaseline,baseline_id)
+        if not row or not proposal or proposal.target_id!=target_id:raise HTTPException(404,'Línea base no encontrada')
+        if row.threshold_mode=='manual':raise HTTPException(409,'El destino usa umbrales manuales')
+        if proposal.id!=baseline.latest(db,[target_id])[target_id].id:raise HTTPException(409,'Hay una línea base más reciente. Actualiza la página.')
+        try:baseline.apply(db,row,proposal,user.id)
+        except ValueError as exc:raise HTTPException(422,str(exc))
+        db.commit();return target_views(db,[row])[0]
+
+    @api.post('/baselines/apply-proposals')
+    def apply_proposals(user=Depends(admin),db:Session=Depends(get_db)):
+        """Approves the latest pending proposal of every check in proposed mode."""
+        targets=list(db.scalars(select(ProbeTarget).where(ProbeTarget.archived.is_(False),ProbeTarget.enabled.is_(True),
+            ProbeTarget.threshold_mode=='proposed').with_for_update()))
+        current=baseline.latest(db,[t.id for t in targets]);applied=0
+        for row in targets:
+            proposal=current.get(row.id)
+            if proposal and proposal.status!='insufficient' and proposal.proposal and not proposal.applied_at:
+                baseline.apply(db,row,proposal,user.id);applied+=1
+        db.commit();return {'applied':applied}
+
+    @api.post('/baselines/recompute',status_code=202)
+    def recompute_baselines(user=Depends(admin),db:Session=Depends(get_db)):
+        job=baseline.request(db);audit(db,'probe_baselines_requested',user.id,job.id);db.commit()
+        return {'job_id':job.id}
 
     @api.post('/targets/{target_id}/probe-runs',status_code=202)
     def test_target(target_id:str,user=Depends(admin),db:Session=Depends(get_db)):
