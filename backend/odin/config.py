@@ -17,7 +17,8 @@ class Settings(BaseSettings):
     isp_name: str = ''
     probe_concurrency: int = 32
     probe_max_addresses: int = 384
-    trace_concurrency: int = 8
+    # More simultaneous mtr runs mixed replies between traces (20 % of traces with 8, none with 4).
+    trace_concurrency: int = 4
     # Local time for the evening peak of adaptive baselines.
     timezone: str = 'America/Bogota'
     idle_seconds: int = 1800

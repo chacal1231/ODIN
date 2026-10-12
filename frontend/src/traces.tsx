@@ -15,6 +15,7 @@ const states: Record<string, string> = {
   cancelled: "Cancelada",
 };
 const errors: Record<string, string> = {
+  trace_inconsistent: "Respuestas mezcladas o bucle de enrutamiento: la traza no se compara",
   trace_timeout: "La traza no terminó a tiempo",
   trace_execution_failed: "Error local al ejecutar mtr",
   trace_parse_failed: "Respuesta de mtr no válida",

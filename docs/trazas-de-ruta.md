@@ -34,3 +34,7 @@ El resumen indica por qué enlace sale la ruta y la secuencia de sistemas autón
 ## Retención
 
 Líneas base: 3 días; las que registraron cambio de ruta y las manuales, 90 días; las de incidente, mientras exista el incidente (366 días). Si el trazador deja de enviar señal aparece **Trazas detenidas** en la barra de estado.
+
+## Trazas incoherentes y concurrencia
+
+Una traza en la que la misma IP aparece en saltos no contiguos se descarta con `trace_inconsistent`: son respuestas atribuidas a otra sonda (o un bucle de enrutamiento) y compararla generaría cambios de ruta falsos. Con 8 mtr simultáneos, el 20 % de las trazas mezclaba respuestas entre sí; con 4 no se observó ninguna, por eso `ODIN_TRACE_CONCURRENCY` vale 4 por defecto. El tracer y el sondeador corren con `init: true`: mtr deja procesos hijos que, sin un init que los recoja, se acumulan como zombis hasta agotar el límite de procesos del contenedor.

@@ -38,6 +38,17 @@ def test_unreached_destination_and_total_loss_at_destination():
     assert trace.parse(report(hub(1, '8.8.8.8', loss=100.0)), '8.8.8.8')[1] is False
 
 
+def test_reply_credited_to_another_hop_is_rejected():
+    # The own router at hops 2 and 5: replies of another trace, not a path.
+    mixed = report(hub(1, '200.25.4.67'), hub(2, '38.191.196.44'), hub(3, '154.54.93.249'), hub(4, '62.115.140.174'),
+                   hub(5, '38.191.196.44'), hub(6, '143.92.120.235'))
+    with pytest.raises(ProbeError, match='trace_inconsistent'):trace.parse(mixed, '143.92.120.235')
+    # The same router answering two consecutive TTLs (or with a silent hop between) is a real path.
+    hops, reached = trace.parse(report(hub(1, '10.0.0.1'), hub(2, '10.0.0.1'), hub(3, '???', loss=100.0), hub(4, '10.0.0.2'),
+                                       hub(5, '8.8.8.8')), '8.8.8.8')
+    assert reached and len(hops) == 5
+
+
 @pytest.mark.parametrize('output', ['', 'not json', report(hub(2, '10.0.0.1')), report(hub(1, 'host.example')),
                                     report({**hub(1, '10.0.0.1'), 'Avg': -1}), report({**hub(1, '10.0.0.1'), 'Loss%': 'x'}),
                                     report(*[hub(n, '10.0.0.%d' % n) for n in range(1, 32)])])

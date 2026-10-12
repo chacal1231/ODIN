@@ -86,6 +86,8 @@ services:
     depends_on:
       migrate:
         condition: service_completed_successfully
+    # fping, DNS and TCP/HTTPS run as child processes: an init reaps any orphan.
+    init: true
     healthcheck:
       test: [CMD, python, -m, odin.probes.health]
       interval: 15s
@@ -100,6 +102,9 @@ services:
     volumes:
       - ./.secrets/master.key:/run/secrets/master.key:ro
     command: [python, -m, odin.probes.trace]
+    # mtr's own children outlive it and are re-parented to PID 1; without an init they pile up as zombies
+    # until the container cannot start processes.
+    init: true
     cap_drop: [ALL]
     cap_add: [NET_RAW]
     security_opt: [no-new-privileges:true]
