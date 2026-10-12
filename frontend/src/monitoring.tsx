@@ -1169,6 +1169,41 @@ export function DestinationOrganization({
     </section>
   );
 }
+function routeChanges(changes: Record<string, any> | undefined) {
+  return Object.entries(changes || {}).map(
+    ([service, c]) => `${service}: antes salía por ${c.before}, ahora por ${c.after}`,
+  );
+}
+/** ODIN's reading of where external services fail: our network, one exit, or the service itself. */
+export function Verdict({ verdict }: { verdict: any }) {
+  if (!verdict || verdict.state === "normal") return null;
+  const [first, ...rest] = verdict.findings || [];
+  return (
+    <div className={"notice verdict " + verdict.state}>
+      <strong>¿Nuestro o de ellos? {verdict.title}</strong>
+      {verdict.action && <p>{verdict.action}</p>}
+      {routeChanges(first?.route_changes).map((t) => (
+        <p key={t}>Cambio de ruta · {t}</p>
+      ))}
+      {rest.length > 0 && (
+        <ul>
+          {rest.map((f: any) => (
+            <li key={f.title}>
+              {f.title}
+              {routeChanges(f.route_changes).map((t) => (
+                <small key={t}> · cambio de ruta: {t}</small>
+              ))}
+            </li>
+          ))}
+        </ul>
+      )}
+      <small>
+        Lectura de ODIN: compara los servicios según su salida, desde un solo
+        punto de medición. No es una causa confirmada.
+      </small>
+    </div>
+  );
+}
 export function OperationsOverview({
   monitor,
   onNavigate,
@@ -1252,6 +1287,7 @@ export function OperationsOverview({
               Ver servicios
             </button>
           </div>
+          <Verdict verdict={data?.verdict} />
           {[...new Set<string>(badExternal.map((d: any) => d.provider))].map(
             (provider) => (
               <div className="probe-profile compact" key={provider}>

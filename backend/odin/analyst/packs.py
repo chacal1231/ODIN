@@ -171,6 +171,15 @@ def neighbor_line(db, case, related):
     return f'Vecino según el inventario: {found["summary"]}.' + (f' {alone}' if alone else '')
 
 
+def verdict_line(case):
+    """ODIN's reading of where an external service fails, from comparing services and their exits."""
+    verdict = case.detail.get('verdict')
+    if not verdict:return ''
+    change = verdict.get('route_change')
+    return (f'Veredicto de ODIN (comparación de servicios por su salida, desde un solo punto de medición; no es una causa confirmada): '
+            f'{verdict["title"]}.' + (f' La ruta cambió: antes salía por {change["before"]}, ahora por {change["after"]}.' if change else ''))
+
+
 def case_pack(db, case):
     from ..cases.correlator import window, case_entity, LATENCY
     from ..cases.entities import Resolver
@@ -210,6 +219,7 @@ def case_pack(db, case):
         '' if external else f'Identidad del equipo: {identity}' + ('' if entity.device_id else ' (sin vínculo confirmado con el inventario)') + '.',
         f'VRF: {case.detail["vrf"]}.' if case.detail.get('vrf') else '',
         neighbor_line(db, case, related),
+        verdict_line(case) if external else '',
         f'Período: desde {stamp_text(case.opened_at)} hasta {stamp_text(case.closed_at) if case.closed_at else "ahora (en curso)"}; '
         f'ventana de evidencias {stamp_text(start)} — {stamp_text(end)}.',
         (f'Logs de contexto: hay {" y ".join(capped)}; se guardaron los {CONTEXT_CAP // 2} primeros y los {CONTEXT_CAP // 2} últimos de cada tipo, '

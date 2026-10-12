@@ -20,6 +20,8 @@ class Settings(BaseSettings):
     # mtr runs sharing a network namespace credit each other's replies: traces run one at a time (~7.5 s each,
     # about 110 checks per 15-minute baseline cycle).
     trace_concurrency: int = 1
+    # The ISP's own autonomous system; detected from the traces when unset.
+    asn: int | None = None
     # Local time for the evening peak of adaptive baselines.
     timezone: str = 'America/Bogota'
     idle_seconds: int = 1800

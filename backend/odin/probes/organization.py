@@ -110,7 +110,9 @@ def overview(db):
         incident=event_incidents[event.incident_id]
         changes.append({'id':event.id,'incident_id':event.incident_id,'kind':event.kind,'at':event.created_at,
             'target_name':names.get(incident.target_id,incident.target_id),'address':incident.address})
-    return {'origin':origin_view(db,stamp),'destinations':result,'pops':pop_views,'links':link_views,
+    from .verdict import compute as verdict
+    origin=origin_view(db,stamp)
+    return {'origin':origin,'verdict':verdict(db,checks,stamp,origin['state']=='healthy'),'destinations':result,'pops':pop_views,'links':link_views,
         'devices':[{'id':d.id,'name':d.name,'pop_id':d.pop_id} for d in devices.values() if not d.archived],
         'incident_groups':groups,'recent_changes':changes,
         'health':dict(Counter(c['state'] for c in checks)),

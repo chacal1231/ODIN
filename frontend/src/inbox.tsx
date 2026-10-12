@@ -1,4 +1,5 @@
 import { labels } from "./probes";
+import { Verdict } from "./monitoring";
 type Item = {
   kind: string; id: string; link: string | null; severity: string; title: string; where: string; detail: string; at: number | null;
   [key: string]: any;
@@ -76,6 +77,7 @@ export function Inbox({ data, zone, onNavigate }: { data: any; zone: string; onN
           </span>
         ))}
       </div>
+      <Verdict verdict={data.verdict} />
       <Section title="Necesita de ti" items={data.attention} empty="Nada pendiente. Si algo cambia, aparece aquí primero."
         hint="Lo crítico primero; dentro de cada nivel, lo más antiguo.">
         {(i) => <Row key={i.kind + i.id} item={i} now={now} zone={zone} onNavigate={onNavigate} />}

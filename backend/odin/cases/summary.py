@@ -5,8 +5,9 @@ permanent red count in the status bar would only teach people to ignore it) and:
 - sessions and interfaces: its neighbor or interface is a transit, a transport or an internal link
   (read from the router port descriptions), or the drop is sustained (critical by the correlator rules);
 - latency of the own network: critical;
-- external services: only when EXTERNAL_TOGETHER or more services are degraded at once, which points to the
-  network or to the probes' origin. A single cloud region with high latency is shown in Incidents, not alerted.
+- external services: when ODIN's verdict blames the own network or one exit (probes/verdict.py); a service that
+  fails alone through a healthy exit is shown, not alerted. Without a verdict, when EXTERNAL_TOGETHER or more
+  services are degraded at once.
 Alerts stay off (shadow mode) until an administrator enables them.
 """
 import datetime as dt
@@ -19,7 +20,7 @@ from . import correlator
 EXTERNAL_TOGETHER = 3
 DAYS = 7
 GROUPS = {'vital': 'Tránsito, transporte o enlace interno', 'sustained': 'Otras caídas sostenidas', 'latency': 'Latencia crítica de red propia',
-          'external': f'{EXTERNAL_TOGETHER} o más servicios externos a la vez'}
+          'external': 'Servicios externos: falla propia o de una salida'}
 
 
 def external(case):
@@ -32,6 +33,9 @@ def group(case, together):
         if critical(case.detail.get('neighbor') or case.detail.get('port')):return 'vital'
         return 'sustained' if case.severity == 'critical' else None
     if external(case):
+        verdict = (case.detail.get('verdict') or {}).get('state')
+        if verdict in ('own', 'exit'):return 'external'
+        if verdict == 'service':return None
         return 'external' if together >= EXTERNAL_TOGETHER else None
     return 'latency' if case.severity == 'critical' else None
 

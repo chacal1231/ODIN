@@ -175,6 +175,11 @@ function CaseDetail({ api, zone, admin, id, onSelect, onChange, onAsk, onDraft, 
     </div>
     <p><ProbeBadge state={data.severity} /> {states[data.state]} · {down(data)} desde {date(data.last_state_at)}</p>
     {data.isolation && <p className="notice">{data.isolation}</p>}
+    {data.detail?.verdict && <p className="notice">
+      <strong>Veredicto de ODIN: {data.detail.verdict.title}.</strong> {data.detail.verdict.action}
+      {data.detail.verdict.route_change && <> La ruta cambió: antes salía por {data.detail.verdict.route_change.before}, ahora por {data.detail.verdict.route_change.after}.</>}
+      <br /><small>Compara los servicios según su salida, desde un solo punto de medición; no es una causa confirmada.</small>
+    </p>}
     <dl className="event-detail">
       <dt>Período</dt><dd>{date(data.opened_at)} — {data.closed_at ? date(data.closed_at) : "en curso"} ({duration(end - data.opened_at)})</dd>
       <dt>Cambios de estado</dt><dd>{data.kind === "latency" ? `${data.drops} incidentes de latencia, ${data.recoveries} cerrados` : `${data.drops} caídas y ${data.recoveries} recuperaciones`}</dd>

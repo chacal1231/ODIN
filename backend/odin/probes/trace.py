@@ -118,6 +118,13 @@ def number(value):
     return float(value)
 
 
+def consistent(hops):
+    """One address at two hops apart is a reply credited to the wrong probe (or a loop), not a path: never compare it."""
+    positions = {}
+    for index, hop in enumerate(h for h in hops if h['address']):positions.setdefault(hop['address'], []).append(index)
+    return all(p[-1] - p[0] + 1 == len(p) for p in positions.values())
+
+
 def parse(output, address):
     """Hops up to the destination; a hop without reply has no address and no times."""
     try:hubs = json.loads(output)['report']['hubs']
@@ -137,10 +144,7 @@ def parse(output, address):
                             for key, name in (('avg', 'Avg'), ('best', 'Best'), ('worst', 'Wrst'), ('stdev', 'StDev'))}})
         except (KeyError, TypeError, ValueError):raise ProbeError('trace_parse_failed')
         if host == address:break
-    # One address at two hops apart is a reply credited to the wrong probe, not a path: never compare it.
-    positions = {}
-    for index, hop in enumerate(h for h in hops if h['address']):positions.setdefault(hop['address'], []).append(index)
-    if any(p[-1] - p[0] + 1 != len(p) for p in positions.values()):raise ProbeError('trace_inconsistent')
+    if not consistent(hops):raise ProbeError('trace_inconsistent')
     reached = bool(hops) and hops[-1]['address'] == address and hops[-1]['loss'] < 100
     return hops, reached
 

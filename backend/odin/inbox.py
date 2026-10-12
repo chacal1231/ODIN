@@ -113,7 +113,9 @@ def build(db, stamp=None):
     resolved.sort(key=lambda x: -(x.get('closed_at') or 0))
     counts = {'Casos': sum(1 for c in alerts if not c.acknowledged_at), 'Incidentes': sum(1 for r in incidents if not r.acknowledged_at),
               'OLTs': len(outages) + sum(1 for o in olts.values() if o.present and not o.reachable) + len(uplinks_down)}
-    return {'attention': attention[:LIMIT], 'progress': progress[:LIMIT], 'resolved': resolved[:LIMIT], 'counts': counts,
+    from .probes.verdict import compute as verdict
+    from .probes.service import origin_view
+    return {'verdict': verdict(db, stamp=stamp, origin_healthy=origin_view(db, stamp)['state'] == 'healthy'), 'attention': attention[:LIMIT], 'progress': progress[:LIMIT], 'resolved': resolved[:LIMIT], 'counts': counts,
             'health': components(checks), 'shift_hours': SHIFT // 3600, 'at': stamp}
 
 

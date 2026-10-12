@@ -275,6 +275,22 @@ def enrich(db, resolver, case, stamp, network):
     case.enriched_at = stamp
 
 
+def judge(db, stamp):
+    """External cases carry ODIN's current verdict (ours, an exit's or the service's); the last one stays after recovery."""
+    cases = [c for c in db.scalars(select(Case).where(Case.kind == LATENCY, Case.state == 'active')) if c.detail.get('scope') == 'external']
+    if not cases:return
+    from ..probes.verdict import compute, for_service
+    from ..probes.service import origin_view
+    found = compute(db, stamp=stamp, origin_healthy=origin_view(db, stamp)['state'] == 'healthy')
+    for case in cases:
+        finding = for_service(found, case.detail.get('service'))
+        if not finding:continue
+        value = {k: finding[k] for k in ('state', 'title', 'action', 'exit', 'direct') if k in finding}
+        change = (finding.get('route_changes') or {}).get(case.detail.get('service'))
+        if change:value['route_change'] = change
+        if case.detail.get('verdict') != value:case.detail = {**case.detail, 'verdict': value}
+
+
 def run(db, stamp=None):
     """One correlation pass; returns True when more events are pending."""
     stamp = stamp or now()
@@ -291,5 +307,6 @@ def run(db, stamp=None):
     network = roles.Network(db)
     for case in db.scalars(select(Case).where(Case.id.in_(touched))):
         enrich(db, resolver, case, stamp, network)
+    judge(db, stamp)
     state.last_run_at = stamp;state.last_success_at = stamp;state.last_error = None
     return more

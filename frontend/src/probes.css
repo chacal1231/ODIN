@@ -928,3 +928,17 @@ i.traffic-out {
 .trace-hops .trace-no_reply td {
   color: var(--muted);
 }
+
+/* Verdict for external services: red when ours or an exit's (act), the notice tone otherwise (inform). */
+.verdict p {
+  margin: 6px 0;
+}
+.verdict ul {
+  margin: 6px 0;
+  padding-left: 18px;
+}
+.verdict.own,
+.verdict.exit {
+  background: var(--error-bg);
+  border-color: var(--crit);
+}
