@@ -2,9 +2,10 @@
 
 An administrator pairs a WhatsApp account by scanning the QR shown in ODIN and picks one of its groups. ODIN then posts
 there what it posts to the Telegram NOC group: each case when it starts alerting, its diagnosis and its recovery, quoting
-the case message so each case reads as a thread, plus the level-1 reports and the shift handovers. An optional second
-group gets the carrier incidents, as Telegram's providers group: one thread per incident until its case closes.
-WhatsApp is outbound only: rating diagnoses, asking ODIN and noting the carrier's ticket stay in ODIN and Telegram.
+the case message so each case reads as a thread, plus the level-1 reports and the shift handovers. What Telegram sends to
+its providers group goes to this same group: a carrier incident gets the provider's details and its closing in the thread
+of its case (recovery and new drops are already there). WhatsApp is outbound only: rating diagnoses, asking ODIN and
+noting the carrier's ticket stay in ODIN and Telegram.
 The service is reached inside the Compose network with a token derived from the master key.
 What is sent leaves the network, as with Telegram: names, addresses and readings of cases.
 """
@@ -96,29 +97,22 @@ def outbound(db, service, st):
 
 
 def providers(db, service, st):
-    """Carrier incidents in the providers group, each in its own thread until the case closes."""
+    """Carrier incidents: the provider's details as a reply in the case thread, then its closing."""
     from ..cases.summary import alerting
     stamp = now()
     known = set(db.scalars(select(WhatsAppProviderMessage.case_id)))
     for case in alerting(db):
         info = messages.carrier(case)
-        if not info or case.id in known:continue
-        sent = service.send(st.providers_group_id, messages.whatsapp(messages.provider(case, info, FOLLOW_UP)))
-        db.add(WhatsAppProviderMessage(case_id=case.id, group_id=st.providers_group_id, message_id=sent, recovered=False, closed=False,
+        thread = db.get(WhatsAppMessage, case.id)
+        if not info or case.id in known or not thread:continue
+        service.send(st.group_id, messages.whatsapp(messages.provider(case, info, FOLLOW_UP)), thread.message_id)
+        db.add(WhatsAppProviderMessage(case_id=case.id, group_id=st.group_id, message_id=thread.message_id, recovered=False, closed=False,
                                        notified_at=stamp))
         db.commit()
     for row, case in db.execute(select(WhatsAppProviderMessage, Case).join(Case, Case.id == WhatsAppProviderMessage.case_id)
-                                .where(WhatsAppProviderMessage.closed.is_(False))).all():
-        reply = lambda message: service.send(row.group_id, messages.whatsapp(message), row.message_id)
-        if case.state == 'closed':
-            reply(messages.provider_closed(case))
-            row.recovered = row.closed = True;db.commit()
-        elif not row.recovered and case.last_state == 'up':
-            reply(messages.provider_recovered(case))
-            row.recovered = True;db.commit()
-        elif row.recovered and case.last_state == 'down' and stamp - row.notified_at > RENOTIFY:
-            reply(messages.dropped_again(case))
-            row.recovered, row.notified_at = False, stamp;db.commit()
+                                .where(WhatsAppProviderMessage.closed.is_(False), Case.state == 'closed')).all():
+        service.send(row.group_id, messages.whatsapp(messages.provider_closed(case)), row.message_id)
+        row.recovered = row.closed = True;db.commit()
 
 
 def deliver(db, service, st):
@@ -144,11 +138,12 @@ def deliver(db, service, st):
 def cycle(service=None):
     with session() as db:
         st = state(db);st.heartbeat_at = now();db.commit()
-        if st.paused or not (st.group_id or st.providers_group_id):return
+        if not st.group_id or st.paused:return
         service = service or Service()
         try:
-            if st.group_id:outbound(db, service, st);deliver(db, service, st)
-            if st.providers_group_id:providers(db, service, st)
+            outbound(db, service, st)
+            providers(db, service, st)
+            deliver(db, service, st)
             st.last_error = None
         except WhatsAppError as exc:
             db.rollback();st = state(db);st.last_error = exc.code

@@ -184,8 +184,8 @@ def test_transport_is_named_by_its_whole_description():
     assert '<b>Proveedor:</b> TRANSPORTE-CENTRO-NORTE-INTXA (transporte)' in text
 
 
-def test_carrier_incidents_also_go_to_the_whatsapp_providers_group():
-    from odin.models import WhatsAppProviderMessage, WhatsAppState
+def test_carrier_incidents_go_to_the_case_thread_of_the_whatsapp_group():
+    from odin.models import WhatsAppMessage, WhatsAppProviderMessage, WhatsAppState
     from odin.noc import whatsapp
 
     class Service:
@@ -194,25 +194,30 @@ def test_carrier_incidents_also_go_to_the_whatsapp_providers_group():
             self.sent.append((group, text, quoted));return f'msg{len(self.sent)}'
     stamp = now() - 600
     with session() as db:
-        # Only the providers group: carrier incidents go even without a NOC group, as on Telegram.
-        db.add(WhatsAppState(id='whatsapp', providers_group_id='777@g.us', providers_group_name='Proveedores', paused=False))
+        db.add(WhatsAppState(id='whatsapp', group_id='123@g.us', group_name='NOC', paused=False))
         case = carrier_case(db, stamp)
         carrier_case(db, stamp, port={'role': 'customer', 'label': 'cliente', 'provider': 'ACME', 'description': 'CUST: ACME'})
         db.commit();case_id = case.id
     service = Service()
     whatsapp.cycle(service)
-    ((group, text, quoted),) = service.sent
-    assert group == '777@g.us' and quoted is None
-    assert text.startswith('*[CRÍTICO]* Sesión BGP · 198.51.100.134 · PE-A') and '*Proveedor:* CARRIER (tránsito)' in text
-    assert '*Seguimiento:* registrar el ticket del proveedor' in text and f'#caso={case_id}' in text
+    # Each case gets its alert; only the carrier one gets the provider's details, quoting its own alert.
+    alerts = [m for m in service.sent if m[2] is None]
+    (details,) = [m for m in service.sent if '*Proveedor:*' in m[1]]
+    assert len(alerts) == 2 and all(a[1].startswith('*[CRÍTICO]* Sesión BGP · 198.51.100.134 · PE-A') for a in alerts)
+    with session() as db:
+        assert details[0] == '123@g.us' and details[2] == db.get(WhatsAppMessage, case_id).message_id
+    assert '*Proveedor:* CARRIER (tránsito)' in details[1] and '*Seguimiento:* registrar el ticket del proveedor' in details[1]
+    count = len(service.sent)
     with session() as db:
         row = db.get(Case, case_id);row.last_state, row.last_state_at = 'up', stamp + 300;db.commit()
     whatsapp.cycle(service);whatsapp.cycle(service)
-    assert len(service.sent) == 2 and service.sent[1][1].startswith('*[RESTABLECIDO · EN OBSERVACIÓN]*') and service.sent[1][2] == 'msg1'
+    # The recovery is the case thread's own: no second one for the provider.
+    recovered = [t for _, t, _ in service.sent[count:] if t.startswith('*[RESTABLECIDO')]
+    assert len(recovered) == 1
     with session() as db:
         row = db.get(Case, case_id);row.state, row.closed_at, row.drops = 'closed', stamp + 2400, 2;db.commit()
+    count = len(service.sent)
     whatsapp.cycle(service);whatsapp.cycle(service)
-    assert len(service.sent) == 3 and service.sent[2][2] == 'msg1'
-    assert service.sent[2][1] == '*[CERRADO]* Sesión BGP · 198.51.100.134 · PE-A\n*Duración:* 40 min\n*Caídas:* 2'
+    assert [(t, q) for _, t, q in service.sent[count:]] == [('*[CERRADO]* Sesión BGP · 198.51.100.134 · PE-A\n*Duración:* 40 min\n*Caídas:* 2', details[2])]
     with session() as db:
         assert db.scalar(select(WhatsAppProviderMessage.closed)) is True

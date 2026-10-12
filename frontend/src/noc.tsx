@@ -220,13 +220,11 @@ function GroupPicker({ label, groups, value, onChange }: { label: string; groups
 
 function WhatsApp({ api, onError }: { api: Api; onError: (s: string) => void }) {
   const [data, setData] = useState<any>(null),
-    [group, setGroup] = useState(""),
-    [providers, setProviders] = useState("");
+    [group, setGroup] = useState("");
   const load = async () => {
     const d = await api("/noc/whatsapp");
     setData(d);
     setGroup((g) => g || d.group_id || "");
-    setProviders((g) => g || d.providers_group_id || "");
   };
   const { busy, run } = useRunner(onError, load);
   useEffect(() => {
@@ -272,40 +270,6 @@ function WhatsApp({ api, onError }: { api: Api; onError: (s: string) => void }) 
           Publica en <strong>{data.group_name}</strong>
           {data.paused && " · en pausa"}
           {data.last_error && <small> · último error: {data.last_error}</small>}
-        </p>
-      )}
-      {service.status === "ready" && (
-        <form
-          onSubmit={(e) => {
-            e.preventDefault();
-            void run(async () => {
-              await api("/noc/whatsapp/providers", "PUT", { group_id: providers });
-            });
-          }}
-        >
-          <GroupPicker label="Grupo de proveedores (opcional)" groups={(data.groups || []).filter((g: Group) => g.id !== data.group_id)}
-            value={providers} onChange={setProviders} />
-          <small className="muted">
-            Como el grupo de proveedores de Telegram: cada falla de tránsito, transporte, IXP o peering en su propio hilo hasta que se cierra.
-            Las respuestas en WhatsApp no llegan a ODIN: el ticket del proveedor se anota en el caso.
-          </small>
-          <div className="probe-actions">
-            <button disabled={busy || !providers || providers === data.providers_group_id}>Usar para proveedores</button>
-            {data.providers_group_id && (
-              <button type="button" className="quiet" disabled={busy} onClick={() => void run(async () => {
-                await api("/noc/whatsapp/providers", "PUT", { group_id: null });
-                setProviders("");
-              })}>
-                Dejar de publicar a proveedores
-              </button>
-            )}
-          </div>
-        </form>
-      )}
-      {data.providers_group_name && (
-        <p>
-          Fallas de proveedores en <strong>{data.providers_group_name}</strong>
-          {data.paused && " · en pausa"}
         </p>
       )}
       <div className="probe-actions">

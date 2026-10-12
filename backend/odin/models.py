@@ -927,15 +927,13 @@ class WhatsAppState(Base):
     id = Column(String(10), primary_key=True, default='whatsapp')
     group_id = Column(String(120))
     group_name = Column(String(200))
-    providers_group_id = Column(String(120))  # carrier incidents, as Telegram's /proveedores group
-    providers_group_name = Column(String(200))
     paused = Column(Boolean, nullable=False, default=False)
     heartbeat_at = Column(BigInteger)
     last_error = Column(String(200))
 
 
 class WhatsAppProviderMessage(Base):
-    """The thread of one carrier incident in the WhatsApp providers group, quoted by its recovery and closing."""
+    """A carrier incident announced in the thread of its case in the WhatsApp group (message_id: the case message), until it closes."""
     __tablename__ = 'whatsapp_provider_messages'
     case_id = Column(ForeignKey('cases.id'), primary_key=True)
     group_id = Column(String(120), nullable=False)

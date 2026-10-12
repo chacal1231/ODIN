@@ -79,11 +79,6 @@ def provider(case, info, follow_up):
     return Message('CRÍTICO' if case.severity == 'critical' else 'ADVERTENCIA', title(case), fields, link=ref(case))
 
 
-def provider_recovered(case):
-    return Message('RESTABLECIDO · EN OBSERVACIÓN', title(case), [('Hora', local(case.resolved_at or case.last_state_at)),
-                                                                  ('Cierre', 'si sigue estable')])
-
-
 def provider_closed(case):
     end = case.closed_at or case.resolved_at or case.last_state_at
     return Message('CERRADO', title(case), [('Duración', span(end - case.opened_at)), ('Caídas', str(case.drops))])
