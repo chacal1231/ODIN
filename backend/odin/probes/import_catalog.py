@@ -1,4 +1,4 @@
-"""Persist a reviewed hyperscaler catalog; validate before activating targets."""
+"""Persist a reviewed catalog of one category (hyperscalers, games...); validate before activating targets."""
 import argparse
 from concurrent.futures import ThreadPoolExecutor
 import hashlib
@@ -10,13 +10,19 @@ from sqlalchemy import select,func
 from ..db import session
 from ..models import ProbeCatalog,ProbeTarget,ProbeProfileVersion,now,uid
 from ..security import audit
-from .config import (host,TransportConfig,DEFAULT_VERSION_ID,TRANSPORT_VERSION_ID,seed_defaults)
+from .config import (host,TransportConfig,DEFAULT_VERSION_ID,TRANSPORT_VERSION_ID,GAMES_VERSION_ID,seed_defaults)
+from .catalog import CATEGORIES
 from .organization import ensure_destination
 from .service import lock,capacity,next_slot,snapshot
 from .resolver import resolve_task,ProbeError
 from . import fping,transport
 
 PROVIDERS={'AWS':'AWS','GOOGLE':'GCP','MICROSOFT':'Azure','ORACLE':'Oracle','IBM':'IBM'}
+CATEGORY_BY_NAME={c['name']:c['id'] for c in CATEGORIES}
+# ICMP profile per category; a provider's border router answers from its control plane and keeps the standard one.
+ICMP_VERSIONS={'juegos':GAMES_VERSION_ID}
+DESCRIPTIONS={'border':'Router de borde del proveedor, no el servidor: responde ICMP desde su plano de control y puede limitarlo. '
+                       'Sirve para seguir la entrada a su red cuando los servidores no responden.'}
 
 
 class CatalogTarget(BaseModel):
@@ -28,7 +34,8 @@ class CatalogTarget(BaseModel):
     city:str|None=None
     country:str|None=Field(default=None,pattern='^[A-Z]{2}$')
     region:str|None=None
-    scope:str=Field(pattern='^(regional|anycast|edge|api)$')
+    scope:str=Field(pattern='^(regional|anycast|edge|api|border)$')
+    asn:int|None=Field(default=None,ge=1,le=4294967295)  # when the endpoint is not in the provider's own network
 
     @model_validator(mode='after')
     def valid(self):
@@ -41,12 +48,13 @@ class Provider(BaseModel):
     model_config=ConfigDict(extra='forbid')
     provider:str
     asn:int=Field(ge=1,le=4294967295)
+    service:str|None=Field(default=None,min_length=1,max_length=120)
     targets:list[CatalogTarget]=Field(min_length=1,max_length=200)
 
 
 class Catalog(BaseModel):
     model_config=ConfigDict(extra='forbid')
-    category:str=Field(pattern='^HYPERSCALERS$')
+    category:str
     version:int=Field(ge=1)
     providers:list[Provider]=Field(min_length=1,max_length=20)
 
@@ -54,23 +62,27 @@ class Catalog(BaseModel):
     def valid(self):
         names=[t.name.casefold() for p in self.providers for t in p.targets]
         if len(names)!=len(set(names)) or len(names)>200:raise ValueError('Destinos duplicados o demasiados')
+        if self.category not in CATEGORY_BY_NAME or self.category=='RED PROPIA':raise ValueError('Categoría no válida')
         providers=[p.provider for p in self.providers]
-        if len(providers)!=len(set(providers)) or set(providers)-set(PROVIDERS):raise ValueError('Proveedor no válido')
+        if len(providers)!=len(set(providers)):raise ValueError('Proveedor duplicado')
+        if self.category=='HYPERSCALERS' and set(providers)-set(PROVIDERS):raise ValueError('Proveedor no válido')
+        if self.category!='HYPERSCALERS' and any(not p.service for p in self.providers):raise ValueError('Falta el servicio del proveedor')
         return self
 
 
 def persist(document):
     catalog=Catalog(**document);digest=hashlib.sha256(json.dumps(document,sort_keys=True).encode()).hexdigest()
-    ids=[]
+    ids=[];category=CATEGORY_BY_NAME[catalog.category]
     with session() as db:
         seed_defaults(db);lock(db)
-        source=db.get(ProbeCatalog,'hyperscalers')
+        source=db.get(ProbeCatalog,category)
         if source and (source.version!=catalog.version or source.digest!=digest):
             raise ValueError('El catálogo guardado difiere. Requiere una migración explícita para conservar ediciones.')
-        if not source:db.add(ProbeCatalog(id='hyperscalers',version=catalog.version,document=document,digest=digest))
+        if not source:db.add(ProbeCatalog(id=category,version=catalog.version,document=document,digest=digest))
         for provider in catalog.providers:
+            service=provider.service or PROVIDERS[provider.provider]
             for item in provider.targets:
-                key=f'hyperscalers:{provider.provider}:{item.name}'
+                key=f'{category}:{provider.provider}:{item.name}'
                 target=db.scalar(select(ProbeTarget).where(ProbeTarget.catalog_key==key))
                 if target:
                     if not target.archived:ids.append(target.id)
@@ -78,26 +90,26 @@ def persist(document):
                 if db.scalar(select(ProbeTarget.id).where(func.lower(ProbeTarget.name)==item.name.lower(),ProbeTarget.archived.is_(False))):
                     raise ValueError('Ya existe un destino con el nombre '+item.name)
                 protocol='icmp' if item.protocol=='icmp6' else item.protocol
-                version=DEFAULT_VERSION_ID if protocol=='icmp' else TRANSPORT_VERSION_ID
-                categories=['hyperscalers']
+                version=TRANSPORT_VERSION_ID if protocol!='icmp' else DEFAULT_VERSION_ID if item.scope=='border' else ICMP_VERSIONS.get(category,DEFAULT_VERSION_ID)
+                categories=[category]
                 if item.name.startswith('GOOGLE-DNS'):categories.append('dns')
                 if item.name=='GOOGLE-WEB':categories.append('search_ai')
                 if item.name=='MICROSOFT-365':categories.append('saas')
                 target=ProbeTarget(id=uid(),name=item.name,address=item.target,family='ipv6' if item.protocol=='icmp6' else 'ipv4',
                     protocol=protocol,check_config=TransportConfig(port=item.port or 443).model_dump() if protocol!='icmp' else {},
                     dns_policy='public_dns',catalog_key=key,catalog_metadata={
-                        'provider':PROVIDERS[provider.provider],'asn_reference':provider.asn,'region':item.region,
+                        'provider':service,'asn_reference':item.asn or provider.asn,'region':item.region,
                         'city':item.city,'country':item.country,'scope':item.scope,'catalog_version':catalog.version,
-                        'measurement_scope':'endpoint_connectivity'},
-                    validation={'status':'pending'},categories=categories,service=PROVIDERS[provider.provider],
-                    description='Conectividad al endpoint del servicio; no representa toda la región.',
+                        'measurement_scope':'provider_border' if item.scope=='border' else 'endpoint_connectivity'},
+                    validation={'status':'pending'},categories=categories,service=service,
+                    description=DESCRIPTIONS.get(item.scope,'Conectividad al endpoint del servicio; no representa toda la región.'),
                     profile_version_id=version,effective=dict(db.get(ProbeProfileVersion,version).config),
                     overrides={},approved_ips=[],enabled=False,epoch=1,version=1)
                 db.add(target);ensure_destination(db,target);db.flush();ids.append(target.id)
                 audit(db,'probe_catalog_target_created',None,target.id)
         if db.scalar(select(func.count()).select_from(ProbeTarget).where(ProbeTarget.archived.is_(False)))>200:
             raise ValueError('Límite de 200 destinos registrados')
-        audit(db,'probe_catalog_imported',None,'hyperscalers');db.commit()
+        audit(db,'probe_catalog_imported',None,category);db.commit()
     return ids
 
 

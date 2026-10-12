@@ -14,8 +14,11 @@ def window_metrics(rounds, config, slot, warm_since):
     sent=sum(r.sent for r in valid);received=sum(r.received for r in valid)
     protocol=config.get('protocol','icmp')
     percentage=100*(sent-received)/sent if sent else None
+    # Jitter: mean |difference| between consecutive replies of one round; rounds are seconds apart and a lost packet breaks the pair.
+    steps=[abs(b-a) for r in valid for a,b in zip(r.samples,r.samples[1:]) if a is not None and b is not None]
     return {'protocol':protocol,'failure_percent':percentage if protocol!='icmp' else None,'p95_ms':samples[math.ceil(len(samples)*0.95)-1] if samples else None,
             'loss_percent':percentage if protocol=='icmp' else None,
+            'jitter_ms':sum(steps)/len(steps) if steps and protocol=='icmp' else None,
             'sent':sent,'received':received,'valid_rounds':len(valid),'expected_rounds':expected,
             'coverage':min(1,len(valid)/expected),'window_seconds':config['window_seconds'],
             'warm':slot-warm_since+interval>=config['window_seconds']}
@@ -33,10 +36,13 @@ def transition(conditions, counters, metrics, config, received):
         del conditions[unreachable]
         conditions['recovery_pending']='warning'
     overall_good=ready
+    # Series started before jitter existed have no thresholds; TCP/HTTPS make one attempt per round.
+    jitter=config.get('jitter_warning') if config.get('protocol','icmp')=='icmp' else None
     for key,value,warning,critical,recovery in [
         ('loss' if config.get('protocol','icmp')=='icmp' else 'availability',metrics['loss_percent'] if config.get('protocol','icmp')=='icmp' else metrics['failure_percent'],config['loss_warning'],config['loss_critical'],config['loss_recovery']),
         ('latency',metrics['p95_ms'],config['rtt_warning'],config['rtt_critical'],
          config['rtt_warning']*config['rtt_recovery_ratio'] if config['rtt_warning'] is not None else None),
+        ('jitter',metrics.get('jitter_ms'),jitter,config.get('jitter_critical'),jitter*config['rtt_recovery_ratio'] if jitter is not None else None),
     ]:
         if warning is None:
             if key in conditions:overall_good=False

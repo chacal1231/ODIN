@@ -8,7 +8,9 @@ Hops: an address of an own port (or of an inventory device) is that router; an a
 port is the far end of that link, with the role of the port description (transit, IXP, peering...), see roles.py.
 ASN per hop comes from mtr (Team Cymru over DNS): the origin AS of the covering prefix, not the operator of the router.
 The path fingerprint keeps routers, hand-off links and autonomous systems, not every address: equal-cost paths inside
-one network are not a change. Only traces that reached the destination are compared.
+one network are not a change. Only traces that reached the destination are compared, or, for a catalog check with a
+reference ASN, traces whose last reply came from inside that network: game servers and hosts that drop probes
+(and a destination down during an incident) still show whether the way into their network changed.
 Limits: one vantage point, the return path is not seen; a provider's MPLS core without TTL propagation shows fewer
 hops; hops without reply are normal (many routers do not answer or rate-limit ICMP).
 """
@@ -22,7 +24,7 @@ import signal
 import subprocess
 import threading
 from concurrent.futures import ThreadPoolExecutor
-from sqlalchemy import select, update, text
+from sqlalchemy import select, update, text, or_
 from sqlalchemy.dialects.postgresql import insert
 from ..config import settings
 from ..db import session
@@ -224,10 +226,16 @@ def execute(task):
             row.status = 'failed';row.error_code = error;db.commit();return
         row.hops = enrich(hops, Inventory(db), row.address)
         row.reached = reached
-        row.path, row.fingerprint = summarize(row.hops)
-        if reached and row.fingerprint:
+        path, row.fingerprint = summarize(row.hops)
+        target = db.get(ProbeTarget, row.target_id)
+        asn = ((target.catalog_metadata or {}).get('asn_reference') if target else None)
+        answered = [h for h in row.hops if h['address'] and h['loss'] < 100]
+        path['network_reached'] = not reached and bool(asn) and bool(answered) and answered[-1]['asn'] == asn
+        row.path = path
+        if (reached or path['network_reached']) and row.fingerprint:
             previous = db.scalar(select(ProbeTrace.fingerprint).where(ProbeTrace.target_id == row.target_id, ProbeTrace.address == row.address,
-                ProbeTrace.protocol == row.protocol, ProbeTrace.status == 'done', ProbeTrace.reached.is_(True), ProbeTrace.fingerprint.is_not(None),
+                ProbeTrace.protocol == row.protocol, ProbeTrace.status == 'done', ProbeTrace.fingerprint.is_not(None),
+                or_(ProbeTrace.reached.is_(True), ProbeTrace.path['network_reached'].as_boolean().is_(True)),
                 ProbeTrace.id != row.id).order_by(ProbeTrace.finished_at.desc()).limit(1))
             row.path_changed = None if previous is None else previous != row.fingerprint
         row.status = 'done'

@@ -8,6 +8,7 @@ DEFAULT_PROFILE_ID = '00000000-0000-4000-8000-000000000001'
 DEFAULT_VERSION_ID = '00000000-0000-4000-8000-000000000002'
 TRANSPORT_PROFILE_ID = '00000000-0000-4000-8000-000000000003'
 TRANSPORT_VERSION_ID = '00000000-0000-4000-8000-000000000004'
+GAMES_VERSION_ID = '00000000-0000-4000-8000-000000000024'
 
 
 class ProbeConfig(BaseModel):
@@ -23,6 +24,8 @@ class ProbeConfig(BaseModel):
     rtt_warning: float | None = Field(default=None, gt=0, le=10000)
     rtt_critical: float | None = Field(default=None, gt=0, le=20000)
     rtt_recovery_ratio: float = Field(default=0.9, ge=0.5, lt=1)
+    jitter_warning: float | None = Field(default=None, gt=0, le=10000)
+    jitter_critical: float | None = Field(default=None, gt=0, le=20000)
     minimum_coverage: float = Field(default=0.8, ge=0.5, le=1)
     persistence: int = Field(default=2, ge=1, le=10)
     recovery_rounds: int = Field(default=3, ge=1, le=10)
@@ -40,6 +43,10 @@ class ProbeConfig(BaseModel):
             raise ValueError('Define ambos umbrales RTT o desactiva ambos')
         if self.rtt_warning is not None and self.rtt_warning >= self.rtt_critical:
             raise ValueError('RTT crítico debe ser mayor que advertencia')
+        if (self.jitter_warning is None)!=(self.jitter_critical is None):
+            raise ValueError('Define ambos umbrales de jitter o desactiva ambos')
+        if self.jitter_warning is not None and (self.jitter_warning >= self.jitter_critical or self.packets < 2):
+            raise ValueError('Jitter: crítico mayor que advertencia y al menos 2 paquetes por ronda')
         return self
 
 
@@ -82,6 +89,8 @@ def seed_defaults(db):
         ('00000000-0000-4000-8000-000000000017','00000000-0000-4000-8000-000000000018','Servicios regionales',ProbeConfig(interval_seconds=60,packets=1,period_ms=2000,timeout_ms=2000)),
         ('00000000-0000-4000-8000-000000000019','00000000-0000-4000-8000-000000000020','Servicios globales',ProbeConfig(interval_seconds=60,packets=1,period_ms=2000,timeout_ms=2000)),
         ('00000000-0000-4000-8000-000000000021','00000000-0000-4000-8000-000000000022','Referencia internacional',ProbeConfig(interval_seconds=60,packets=1,period_ms=2000,timeout_ms=2000)),
+        # Real-time play notices loss before web traffic does; jitter waits for each server's baseline.
+        ('00000000-0000-4000-8000-000000000023',GAMES_VERSION_ID,'Juegos · tiempo real',ProbeConfig(loss_warning=2,loss_critical=10,loss_recovery=1)),
     ]
     for profile_id,version_id,name,config in templates:
         if not db.get(ProbeProfile,profile_id):

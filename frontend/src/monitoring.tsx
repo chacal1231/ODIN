@@ -111,7 +111,7 @@ function checkMetrics(checks: any[]): Metrics {
       const loss =
         (c.protocol || "icmp") === "icmp" ? m.loss_percent : m.failure_percent;
       if (loss != null && (out.loss == null || loss > out.loss)) out.loss = loss;
-      out.latency = worse(out.latency, level(m.conditions, ["latency"]));
+      out.latency = worse(out.latency, level(m.conditions, ["latency", "jitter"]));
       out.lossLevel = worse(out.lossLevel, level(m.conditions, lossConditions));
     }
   return out;

@@ -31,8 +31,11 @@ Se conservan Estándar y Servicios TCP / HTTPS. Se añaden plantillas reutilizab
 4. Servicios regionales.
 5. Servicios globales.
 6. Referencia internacional.
+7. Juegos · tiempo real.
 
-Las tres primeras mantienen la base ICMP de diez paquetes cada 30 segundos; las otras usan un intento cada 60 segundos y timeout de dos segundos, compatibles con TCP/HTTPS. No se asignan automáticamente ni se inventan umbrales de latencia por región. Cambiar una plantilla crea una versión, con aplicación explícita a sus comprobaciones; los ajustes individuales se conservan.
+Las tres primeras y Juegos mantienen la base ICMP de diez paquetes cada 30 segundos; Juegos abre advertencia con 2 % de pérdida y crítico con 10 %. Las demás usan un intento cada 60 segundos y timeout de dos segundos, compatibles con TCP/HTTPS. No se asignan automáticamente ni se inventan umbrales de latencia por región.
+
+El jitter ICMP es la media de la diferencia entre respuestas consecutivas de una misma ronda; un paquete perdido corta el par y nunca se compara entre rondas. Tiene umbrales opcionales de advertencia y crítico (requiere al menos dos paquetes por ronda) y no se evalúa en TCP/HTTPS. Se fija por destino tras observar su línea base. Cambiar una plantilla crea una versión, con aplicación explícita a sus comprobaciones; los ajustes individuales se conservan.
 
 ## Migración y permisos
 
@@ -42,3 +45,9 @@ Renombrar, cambiar ámbito/asociación o marcar una comprobación como esencial 
 
 Respaldar PostgreSQL antes del despliegue. Verificar migración, IDs/épocas/configuración antes/después, salud del sondeador, comprobaciones vigentes y acceso autenticado. El rollback de la migración elimina la agrupación; no borra las mediciones originales, pero pierde las asociaciones organizativas nuevas.
 
+
+## Catálogos y juegos
+
+`python -m odin.probes.import_catalog <archivo>` carga un catálogo revisado de cualquier categoría (salvo Red propia), crea los destinos desactivados y los valida; `--activate` activa los que pasan. Sin argumento carga `hyperscalers-v1.json`; `data/juegos-v1.json` contiene los servidores de juego observados en flujos (Akvorado) que responden a ICMP, Supercell por TCP 9339 y los routers de borde de Riot y Blizzard, cuyos servidores no responden. Un borde mide la entrada a la red del proveedor, no el servidor, y usa el perfil Estándar porque su plano de control limita ICMP. Las IP de servidores de juego rotan: revisar el catálogo con los flujos cada mes.
+
+Cada destino de catálogo guarda su ASN de referencia. Una traza que no llega al destino pero cuyo último salto con respuesta está dentro de ese ASN se marca como "Llegó a la red del destino" y se compara para detectar cambios de ruta, también durante un incidente con el destino caído.

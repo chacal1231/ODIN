@@ -3,7 +3,7 @@ CATEGORIES = [
     {'id':'red_propia','name':'RED PROPIA','services':['PE']},
     {'id':'hyperscalers','name':'HYPERSCALERS','services':['AWS','Azure','GCP','Oracle','IBM']},
     {'id':'dns','name':'DNS','services':['Cloudflare','Google','Quad9','OpenDNS']},
-    {'id':'juegos','name':'JUEGOS','services':['Riot','Steam/Valve','Epic','EA','Blizzard','PlayStation','Xbox']},
+    {'id':'juegos','name':'JUEGOS','services':['Riot','Steam/Valve','Epic','EA','Blizzard','PlayStation','Xbox','Free Fire','Roblox','Supercell','Tencent','Activision','Multiplay/Unity']},
     {'id':'streaming','name':'STREAMING','services':['YouTube','Netflix','Twitch','Disney+','Prime Video']},
     {'id':'social','name':'SOCIAL','services':['Meta/Facebook','Instagram','WhatsApp','TikTok','Telegram','X']},
     {'id':'cdn','name':'CDN','services':['Cloudflare','Akamai','Fastly','CloudFront']},

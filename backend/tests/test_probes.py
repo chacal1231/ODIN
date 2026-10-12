@@ -78,6 +78,29 @@ def test_threshold_equality_persistence_and_recovery():
     assert not conditions
 
 
+def test_jitter_within_rounds_thresholds_and_old_series():
+    for values in ({'jitter_warning':5},{'jitter_warning':10,'jitter_critical':5},{'jitter_warning':5,'jitter_critical':10,'packets':1}):
+        with pytest.raises(ValueError):ProbeConfig(**values)
+    c=ProbeConfig(jitter_warning=5,jitter_critical=10).model_dump()
+    # Pairs never span rounds or a lost packet: |12-10|, |16-22| and |40-44|.
+    rounds=[SimpleNamespace(status='valid',slot=30,samples=[10,12,None,16,22],sent=5,received=4),
+            SimpleNamespace(status='valid',slot=60,samples=[40,44],sent=2,received=2)]
+    assert window_metrics(rounds,c,60,30)['jitter_ms']==pytest.approx(12/3)
+    assert window_metrics(rounds,{**c,'protocol':'tcp'},60,30)['jitter_ms'] is None
+    m={'warm':True,'coverage':1,'p95_ms':30,'loss_percent':0,'jitter_ms':12}
+    conditions,counters={},{}
+    for _ in range(2):conditions,counters=transition(conditions,counters,m,c,10)
+    assert conditions=={'jitter':'critical'}
+    for _ in range(3):conditions,counters=transition(conditions,counters,{**m,'jitter_ms':1},c,10)
+    assert not conditions
+    # A series snapshotted before jitter existed, and TCP checks, never evaluate it.
+    old={k:v for k,v in c.items() if not k.startswith('jitter_')}
+    for config in (old,{**c,'protocol':'tcp','failure_percent':0}):
+        conditions,counters={},{}
+        for _ in range(3):conditions,counters=transition(conditions,counters,{**m,'failure_percent':0},config,10)
+        assert not conditions
+
+
 def test_unreachable_requires_valid_rounds_and_recovery_window():
     c=ProbeConfig().model_dump();m={'warm':False,'coverage':.3,'p95_ms':None,'loss_percent':100}
     conditions,counters={},{}

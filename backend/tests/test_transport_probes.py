@@ -12,7 +12,7 @@ from sqlalchemy import select,func
 from odin.db import session
 from odin.models import ProbeCatalog,ProbeTarget
 from odin.probes import transport,transport_worker,resolver,import_catalog
-from odin.probes.config import ProbeConfig,TransportConfig,measurement_config
+from odin.probes.config import ProbeConfig,TransportConfig,measurement_config,DEFAULT_VERSION_ID,TRANSPORT_VERSION_ID,GAMES_VERSION_ID
 from odin.probes.detector import window_metrics,transition
 
 
@@ -41,6 +41,30 @@ def test_catalog_persistence_idempotent_and_preserves_edits():
         assert db.get(ProbeTarget,target.id).description=='Edición NOC'
     source['version']=2
     with pytest.raises(ValueError):import_catalog.persist(source)
+
+
+def test_games_catalog_profiles_borders_and_references():
+    import_catalog.persist(document())
+    source=json.loads((Path(import_catalog.__file__).parent/'data/juegos-v1.json').read_text())
+    ids=import_catalog.persist(source)
+    assert len(ids)==21 and len(import_catalog.persist(source))==21
+    with session() as db:
+        assert db.get(ProbeCatalog,'juegos').document==source and db.get(ProbeCatalog,'hyperscalers')
+        games={t.name:t for t in db.scalars(select(ProbeTarget).where(ProbeTarget.catalog_key.like('juegos:%')))}
+        assert len(games)==21 and all(t.categories==['juegos'] and not t.enabled for t in games.values())
+        assert games['VALVE-SDR-LIM-1'].profile_version_id==GAMES_VERSION_ID and games['VALVE-SDR-LIM-1'].effective['loss_warning']==2
+        border=games['RIOT-BORDE-AS6507']
+        assert border.profile_version_id==DEFAULT_VERSION_ID and border.catalog_metadata['measurement_scope']=='provider_border'
+        assert border.service=='Riot' and border.catalog_metadata['asn_reference']==6507 and 'no el servidor' in border.description
+        assert games['FORTNITE-BR'].catalog_metadata['asn_reference']==16509 and games['FORTNITE-NAE'].catalog_metadata['asn_reference']==14618
+        assert games['SUPERCELL-1'].protocol=='tcp' and games['SUPERCELL-1'].check_config['port']==9339
+        assert games['SUPERCELL-1'].profile_version_id==TRANSPORT_VERSION_ID
+
+
+@pytest.mark.parametrize('change',[{'category':'RED PROPIA'},{'category':'OTRA'},{'providers':[{'provider':'X','asn':1,'targets':[
+    {'name':'X-1','target':'192.0.2.1','protocol':'icmp','scope':'regional'}]}]}])
+def test_catalog_rejects_own_network_unknown_category_and_missing_service(change):
+    with pytest.raises(ValueError):import_catalog.Catalog(**{'category':'JUEGOS','version':1,'providers':[],**change})
 
 
 def test_catalog_activation_and_failed_validation(monkeypatch):

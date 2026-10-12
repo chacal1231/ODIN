@@ -165,6 +165,22 @@ def test_execute_compares_with_previous_reached_path(monkeypatch):
         failed = db.get(ProbeTrace, task['id']);assert (failed.status, failed.error_code, failed.hops) == ('failed', 'trace_timeout', [])
 
 
+def test_trace_ending_inside_reference_asn_is_compared(monkeypatch):
+    def hops(transit):return [{'hop': 1, 'address': '4.69.0.1', 'asn': transit, 'loss': 0.0}, {'hop': 2, 'address': '104.160.159.25', 'asn': 6507, 'loss': 0.0},
+                              {'hop': 3, 'address': None, 'asn': None, 'loss': 100.0}]
+    with session() as db:
+        t = target(db, catalog_metadata={'asn_reference': 6507})
+        first = run_with(monkeypatch, db, t, hops(64500), reached=False)
+        assert first.path['network_reached'] and first.path_changed is None
+        assert run_with(monkeypatch, db, t, hops(64500), reached=False).path_changed is False
+        assert run_with(monkeypatch, db, t, hops(64501), reached=False).path_changed is True
+        # Dying before the destination's network is not comparable; neither is a check without a reference ASN.
+        lost = run_with(monkeypatch, db, t, hops(64501)[:1], reached=False)
+        assert not lost.path['network_reached'] and lost.path_changed is None
+        t.catalog_metadata = {};db.commit()
+        assert run_with(monkeypatch, db, t, hops(64500), reached=False).path_changed is None
+
+
 def test_incident_open_and_recovery_request_traces():
     with session() as db:
         t = target(db);start = now() // 300 * 300 - 1800

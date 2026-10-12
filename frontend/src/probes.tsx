@@ -40,6 +40,7 @@ export const labels: Record<string, string> = {
   endpoint_unavailable: "Endpoint sin respuesta",
   pending_validation: "Pendiente de validación",
   latency: "Latencia",
+  jitter: "Jitter",
   unreachable: "Sin respuesta",
   recovery_pending: "Comprobando recuperación",
 };
@@ -146,6 +147,8 @@ const configFields: [string, string, number, number, number][] = [
   ],
   ["rtt_warning", "Latencia p95 · advertencia (ms)", 0.1, 10000, 0.1],
   ["rtt_critical", "Latencia p95 · crítico (ms)", 0.1, 20000, 0.1],
+  ["jitter_warning", "Jitter ICMP · advertencia (ms)", 0.1, 10000, 0.1],
+  ["jitter_critical", "Jitter ICMP · crítico (ms)", 0.1, 20000, 0.1],
   ["period_ms", "Separación de intentos (ms)", 100, 2000, 10],
   ["timeout_ms", "Tiempo de espera (ms)", 50, 2000, 10],
   ["minimum_coverage", "Cobertura mínima (0–1)", 0.5, 1, 0.05],
@@ -154,6 +157,10 @@ const configFields: [string, string, number, number, number][] = [
   ["unreachable_rounds", "Rondas sin respuesta", 2, 10, 1],
   ["rtt_recovery_ratio", "Factor de recuperación de latencia", 0.5, 0.99, 0.01],
 ];
+// Latency and jitter thresholds are off until set; the recovery ratio always applies.
+const optionalField = (key: string) =>
+  (key.startsWith("rtt_") && key !== "rtt_recovery_ratio") ||
+  key.startsWith("jitter_");
 function ConfigFields({
   config,
   onChange,
@@ -171,9 +178,9 @@ function ConfigFields({
             min={min}
             max={max}
             step={step}
-            required={!key.startsWith("rtt_") || key === "rtt_recovery_ratio"}
+            required={!optionalField(key)}
             value={config[key] ?? ""}
-            placeholder={key.startsWith("rtt_") ? "Desactivado" : undefined}
+            placeholder={optionalField(key) ? "Desactivado" : undefined}
             onChange={(e) =>
               onChange({
                 ...config,
@@ -566,6 +573,9 @@ export function Destinations({
                         <small key={m.address}>
                           {t.measurements.length > 1 && m.address + ": "}
                           {m.state === "no_data" ? "—" : fmt(m.p95_ms) + " ms"}
+                          {m.state !== "no_data" &&
+                            m.jitter_ms != null &&
+                            " · jitter " + fmt(m.jitter_ms) + " ms"}
                         </small>
                       ))}
                     </td>
@@ -1092,6 +1102,8 @@ export function Destinations({
                 {p.versions[0].config.rtt_warning == null
                   ? "sin umbral"
                   : `${p.versions[0].config.rtt_warning}/${p.versions[0].config.rtt_critical} ms`}
+                {p.versions[0].config.jitter_warning != null &&
+                  ` · jitter ${p.versions[0].config.jitter_warning}/${p.versions[0].config.jitter_critical} ms`}
               </small>
             </span>
             {admin && (
@@ -1808,6 +1820,8 @@ export function Incidents({
             {detail.profile.rtt_warning == null
               ? "sin umbral"
               : `${detail.profile.rtt_warning}/${detail.profile.rtt_critical} ms`}
+            {detail.profile.jitter_warning != null &&
+              ` · jitter ${detail.profile.jitter_warning}/${detail.profile.jitter_critical} ms`}
           </p>
           <button
             className="secondary"
@@ -1854,6 +1868,8 @@ export function Incidents({
                 {e.data.metrics && (
                   <p>
                     Latencia p95 {fmt(e.data.metrics.p95_ms)} ms ·{" "}
+                    {e.data.metrics.jitter_ms != null &&
+                      `jitter ${fmt(e.data.metrics.jitter_ms)} ms · `}
                     {e.data.metrics.failure_percent != null
                       ? "fallos"
                       : "pérdida"}{" "}

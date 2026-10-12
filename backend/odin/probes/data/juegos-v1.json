@@ -1,0 +1,97 @@
+{
+  "category": "JUEGOS",
+  "version": 1,
+  "providers": [
+    {
+      "provider": "RIOT",
+      "asn": 6507,
+      "service": "Riot",
+      "targets": [
+        {"name": "RIOT-BORDE-AS6507", "target": "104.160.159.25", "protocol": "icmp", "scope": "border"}
+      ]
+    },
+    {
+      "provider": "VALVE",
+      "asn": 32590,
+      "service": "Steam/Valve",
+      "targets": [
+        {"name": "VALVE-SDR-LIM-1", "target": "155.133.244.51", "protocol": "icmp", "city": "Lima", "country": "PE", "scope": "regional"},
+        {"name": "VALVE-SDR-LIM-2", "target": "155.133.244.35", "protocol": "icmp", "city": "Lima", "country": "PE", "scope": "regional"},
+        {"name": "VALVE-SDR-LIM-3", "target": "155.133.244.36", "protocol": "icmp", "city": "Lima", "country": "PE", "scope": "regional"}
+      ]
+    },
+    {
+      "provider": "GARENA",
+      "asn": 58521,
+      "service": "Free Fire",
+      "targets": [
+        {"name": "FREEFIRE-1", "target": "143.92.120.235", "protocol": "icmp", "scope": "regional"},
+        {"name": "FREEFIRE-2", "target": "143.92.120.153", "protocol": "icmp", "scope": "regional"},
+        {"name": "FREEFIRE-3", "target": "143.92.120.229", "protocol": "icmp", "scope": "regional"}
+      ]
+    },
+    {
+      "provider": "TENCENT",
+      "asn": 132203,
+      "service": "Tencent",
+      "targets": [
+        {"name": "TENCENT-MOBILE-1", "target": "170.106.5.33", "protocol": "icmp", "scope": "regional"},
+        {"name": "TENCENT-MOBILE-2", "target": "49.51.80.224", "protocol": "icmp", "scope": "regional"}
+      ]
+    },
+    {
+      "provider": "MULTIPLAY",
+      "asn": 35028,
+      "service": "Multiplay/Unity",
+      "targets": [
+        {"name": "MULTIPLAY-1", "target": "85.236.97.181", "protocol": "icmp", "scope": "regional"},
+        {"name": "MULTIPLAY-2", "target": "85.236.100.227", "protocol": "icmp", "scope": "regional"}
+      ]
+    },
+    {
+      "provider": "EA",
+      "asn": 22220,
+      "service": "EA",
+      "targets": [
+        {"name": "EA-1", "target": "159.153.52.114", "protocol": "icmp", "scope": "regional"},
+        {"name": "EA-2", "target": "159.153.52.116", "protocol": "icmp", "scope": "regional"}
+      ]
+    },
+    {
+      "provider": "SONY",
+      "asn": 33353,
+      "service": "PlayStation",
+      "targets": [
+        {"name": "PSN-1", "target": "104.142.255.138", "protocol": "icmp", "scope": "regional"}
+      ]
+    },
+    {
+      "provider": "BLIZZARD",
+      "asn": 57976,
+      "service": "Blizzard",
+      "targets": [
+        {"name": "BLIZZARD-1", "target": "24.105.52.38", "protocol": "icmp", "scope": "regional"},
+        {"name": "BLIZZARD-BORDE-AS57976", "target": "137.221.69.31", "protocol": "icmp", "scope": "border"}
+      ]
+    },
+    {
+      "provider": "EPIC",
+      "asn": 14618,
+      "service": "Epic",
+      "targets": [
+        {"name": "FORTNITE-NAE", "target": "ping-nae.ds.on.epicgames.com", "protocol": "icmp", "region": "NA-East", "scope": "regional"},
+        {"name": "FORTNITE-BR", "target": "ping-br.ds.on.epicgames.com", "protocol": "icmp", "region": "Brasil", "asn": 16509, "scope": "regional"}
+      ]
+    },
+    {
+      "provider": "SUPERCELL",
+      "asn": 16509,
+      "service": "Supercell",
+      "targets": [
+        {"name": "SUPERCELL-1", "target": "44.227.138.182", "protocol": "tcp", "port": 9339, "scope": "regional"},
+        {"name": "SUPERCELL-2", "target": "44.241.61.155", "protocol": "tcp", "port": 9339, "scope": "regional"},
+        {"name": "SUPERCELL-3", "target": "52.33.95.61", "protocol": "tcp", "port": 9339, "scope": "regional"}
+      ]
+    }
+  ]
+}

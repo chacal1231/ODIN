@@ -62,7 +62,12 @@ function PathSummary({ trace }: { trace: any }) {
   if (trace.status !== "done") return null;
   return (
     <small>
-      {trace.reached ? "Llegó al destino" : "No llegó al destino"} ·{" "}
+      {trace.reached
+        ? "Llegó al destino"
+        : p.network_reached
+          ? "Llegó a la red del destino"
+          : "No llegó al destino"}{" "}
+      ·{" "}
       {trace.hop_count} saltos
       {p.handoff && <> · sale por {handoff(p.handoff)}</>}
       {!p.handoff && p.last_own && <> · último equipo propio {p.last_own.device_name}</>}
