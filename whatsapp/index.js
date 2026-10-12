@@ -97,9 +97,21 @@ const routes = {
     if (typeof chat !== 'string' || !chat.endsWith('@g.us') || typeof text !== 'string' || !text) {
       throw Object.assign(new Error('invalid'), { code: 422 });
     }
-    const options = quoted ? { quotedMessageId: String(quoted) } : {};
-    const message = await ready().sendMessage(chat, text.slice(0, 4000), options);
-    return { id: message.id._serialized };
+    // client.sendMessage() sends but returns nothing with this WhatsApp Web: message keys lost `_serialized`
+    // (toString() gives it now), so its final lookup misses. Same text options, done here to keep the sent ID.
+    const id = await ready().pupPage.evaluate(async (chatId, content, quotedId) => {
+      const target = await window.WWebJS.getChat(chatId, { getAsModel: false });
+      if (!target) return null;
+      const mine = () => target.msgs.getModelsArray().filter((m) => m.id.fromMe).map((m) => m.id.toString());
+      const before = new Set(mine());
+      const message = await window.WWebJS.sendMessage(target, content, {
+        linkPreview: true, parseVCards: true, mentionedJidList: [], ignoreQuoteErrors: true, waitUntilMsgSent: false,
+        ...(quotedId ? { quotedMessageId: quotedId } : {}),
+      });
+      return message ? message.id.toString() : mine().filter((m) => !before.has(m)).pop() || null;
+    }, chat, text.slice(0, 4000), quoted ? String(quoted) : null);
+    if (!id) throw Object.assign(new Error('chat_not_found'), { code: 422 });
+    return { id };
   },
   'POST /logout': async () => {
     await ready().logout();
