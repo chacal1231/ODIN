@@ -2,8 +2,9 @@
 
 An administrator pairs a WhatsApp account by scanning the QR shown in ODIN and picks one of its groups. ODIN then posts
 there what it posts to the Telegram NOC group: each case when it starts alerting, its diagnosis and its recovery, quoting
-the case message so each case reads as a thread, plus the level-1 reports and the shift handovers. WhatsApp is outbound
-only: rating diagnoses and asking ODIN stay in ODIN and Telegram.
+the case message so each case reads as a thread, plus the level-1 reports and the shift handovers. An optional second
+group gets the carrier incidents, as Telegram's providers group: one thread per incident until its case closes.
+WhatsApp is outbound only: rating diagnoses, asking ODIN and noting the carrier's ticket stay in ODIN and Telegram.
 The service is reached inside the Compose network with a token derived from the master key.
 What is sent leaves the network, as with Telegram: names, addresses and readings of cases.
 """
@@ -15,11 +16,13 @@ import httpx
 from sqlalchemy import select
 from ..config import settings
 from ..db import session
-from ..models import Analysis, Case, CaseReport, ShiftReport, WhatsAppMessage, WhatsAppState, now
+from ..models import Analysis, Case, CaseReport, ShiftReport, WhatsAppMessage, WhatsAppProviderMessage, WhatsAppState, now
 from . import messages, reports
 
 TIMEOUT = 30
 RENOTIFY = 600
+# Replies in WhatsApp do not reach ODIN (outbound only), unlike Telegram's providers group.
+FOLLOW_UP = 'registrar el ticket del proveedor y sus novedades como nota del caso en ODIN'
 
 
 class WhatsAppError(Exception):
@@ -72,7 +75,7 @@ def outbound(db, service, st):
     new = [c for c in alerting(db) if c.id not in known]
     groups = [[c] for c in new if not external(c)] + ([[c for c in new if external(c)]] if any(external(c) for c in new) else [])
     for cases in groups:
-        message = messages.external_group(cases) if external(cases[0]) else messages.case_alert(cases[0])
+        message = messages.external_group(cases) if external(cases[0]) else messages.case_alert(cases[0], messages.isolation(db, cases[0]))
         sent = service.send(st.group_id, messages.whatsapp(message))
         for case in cases:db.add(WhatsAppMessage(case_id=case.id, group_id=st.group_id, message_id=sent, notified_at=stamp))
         db.commit()
@@ -89,6 +92,32 @@ def outbound(db, service, st):
             row.recovered = True;db.commit()
         elif row.recovered and case.state == 'active' and case.last_state == 'down' and stamp - row.notified_at > RENOTIFY:
             service.send(row.group_id, messages.whatsapp(messages.dropped_again(case)), row.message_id)
+            row.recovered, row.notified_at = False, stamp;db.commit()
+
+
+def providers(db, service, st):
+    """Carrier incidents in the providers group, each in its own thread until the case closes."""
+    from ..cases.summary import alerting
+    stamp = now()
+    known = set(db.scalars(select(WhatsAppProviderMessage.case_id)))
+    for case in alerting(db):
+        info = messages.carrier(case)
+        if not info or case.id in known:continue
+        sent = service.send(st.providers_group_id, messages.whatsapp(messages.provider(case, info, FOLLOW_UP)))
+        db.add(WhatsAppProviderMessage(case_id=case.id, group_id=st.providers_group_id, message_id=sent, recovered=False, closed=False,
+                                       notified_at=stamp))
+        db.commit()
+    for row, case in db.execute(select(WhatsAppProviderMessage, Case).join(Case, Case.id == WhatsAppProviderMessage.case_id)
+                                .where(WhatsAppProviderMessage.closed.is_(False))).all():
+        reply = lambda message: service.send(row.group_id, messages.whatsapp(message), row.message_id)
+        if case.state == 'closed':
+            reply(messages.provider_closed(case))
+            row.recovered = row.closed = True;db.commit()
+        elif not row.recovered and case.last_state == 'up':
+            reply(messages.provider_recovered(case))
+            row.recovered = True;db.commit()
+        elif row.recovered and case.last_state == 'down' and stamp - row.notified_at > RENOTIFY:
+            reply(messages.dropped_again(case))
             row.recovered, row.notified_at = False, stamp;db.commit()
 
 
@@ -115,11 +144,11 @@ def deliver(db, service, st):
 def cycle(service=None):
     with session() as db:
         st = state(db);st.heartbeat_at = now();db.commit()
-        if not st.group_id or st.paused:return
+        if st.paused or not (st.group_id or st.providers_group_id):return
         service = service or Service()
         try:
-            outbound(db, service, st)
-            deliver(db, service, st)
+            if st.group_id:outbound(db, service, st);deliver(db, service, st)
+            if st.providers_group_id:providers(db, service, st)
             st.last_error = None
         except WhatsAppError as exc:
             db.rollback();st = state(db);st.last_error = exc.code

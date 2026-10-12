@@ -10,6 +10,7 @@ from odin.inventory.connectors import ConnectorError
 from odin.analyst import service
 from odin.analyst.llm import ApiLlm, DEFAULT_MODEL
 from odin import telegram
+from odin.noc import messages
 from test_access import enroll
 from test_analyst import FakeLlm, answer, one_case, run_jobs
 from test_telegram import Bot, message
@@ -178,6 +179,40 @@ def test_transport_is_named_by_its_whole_description():
     with session() as db:
         case = carrier_case(db, now(), port={'role': 'transport', 'label': 'transporte', 'provider': 'CENTRO',
                                              'description': 'TRANSPORTE-CENTRO-NORTE-INTXA', 'remote_device_name': 'PE-B'})
-        text = telegram.provider_text(case, telegram.carrier(case))
+        text = telegram.provider_text(case, messages.carrier(case))
         db.rollback()
     assert '<b>Proveedor:</b> TRANSPORTE-CENTRO-NORTE-INTXA (transporte)' in text
+
+
+def test_carrier_incidents_also_go_to_the_whatsapp_providers_group():
+    from odin.models import WhatsAppProviderMessage, WhatsAppState
+    from odin.noc import whatsapp
+
+    class Service:
+        def __init__(self):self.sent = []
+        def send(self, group, text, quoted=None):
+            self.sent.append((group, text, quoted));return f'msg{len(self.sent)}'
+    stamp = now() - 600
+    with session() as db:
+        # Only the providers group: carrier incidents go even without a NOC group, as on Telegram.
+        db.add(WhatsAppState(id='whatsapp', providers_group_id='777@g.us', providers_group_name='Proveedores', paused=False))
+        case = carrier_case(db, stamp)
+        carrier_case(db, stamp, port={'role': 'customer', 'label': 'cliente', 'provider': 'ACME', 'description': 'CUST: ACME'})
+        db.commit();case_id = case.id
+    service = Service()
+    whatsapp.cycle(service)
+    ((group, text, quoted),) = service.sent
+    assert group == '777@g.us' and quoted is None
+    assert text.startswith('*[CRÍTICO]* Sesión BGP · 198.51.100.134 · PE-A') and '*Proveedor:* CARRIER (tránsito)' in text
+    assert '*Seguimiento:* registrar el ticket del proveedor' in text and f'#caso={case_id}' in text
+    with session() as db:
+        row = db.get(Case, case_id);row.last_state, row.last_state_at = 'up', stamp + 300;db.commit()
+    whatsapp.cycle(service);whatsapp.cycle(service)
+    assert len(service.sent) == 2 and service.sent[1][1].startswith('*[RESTABLECIDO · EN OBSERVACIÓN]*') and service.sent[1][2] == 'msg1'
+    with session() as db:
+        row = db.get(Case, case_id);row.state, row.closed_at, row.drops = 'closed', stamp + 2400, 2;db.commit()
+    whatsapp.cycle(service);whatsapp.cycle(service)
+    assert len(service.sent) == 3 and service.sent[2][2] == 'msg1'
+    assert service.sent[2][1] == '*[CERRADO]* Sesión BGP · 198.51.100.134 · PE-A\n*Duración:* 40 min\n*Caídas:* 2'
+    with session() as db:
+        assert db.scalar(select(WhatsAppProviderMessage.closed)) is True

@@ -13,6 +13,7 @@ from dataclasses import dataclass, field
 from ..config import settings
 from .guides import local, span
 
+CARRIER_ROLES = ('transit', 'transport', 'ixp', 'peering')
 KINDS = {'bgp_session': 'Sesión BGP', 'interface': 'Interfaz', 'latency': 'Latencia', 'access': 'Caída de acceso'}
 REPORTS = {'inicial': 'INFORME N1', 'actualizacion': 'ACTUALIZACIÓN N1', 'restablecido': 'RESTABLECIDO (N1)', 'escalado': 'ESCALADO A N2'}
 
@@ -51,6 +52,41 @@ def case_alert(case, isolation=None):
     if (case.detail.get('impact') or {}).get('text'):fields.append(('Afectación', case.detail['impact']['text']))
     if isolation:fields.append(('Aislamiento', isolation))
     return Message('CRÍTICO' if case.severity == 'critical' else 'ADVERTENCIA', title(case), fields, link=ref(case))
+
+
+def isolation(db, case):
+    """Whether a BGP drop is alone or comes with others (cases/api.py); None for other kinds."""
+    if case.kind != 'bgp_session':return None
+    from ..cases.api import isolation as alone, related_cases
+    from ..cases.entities import Resolver
+    return alone(db, case, related_cases(db, case, Resolver(db)))
+
+
+def carrier(case):
+    """The port or neighbor summary of a case about a carrier link (transit, transport, IXP, peering), or None."""
+    info = case.detail.get('neighbor') or case.detail.get('port') or {}
+    return info if info.get('role') in CARRIER_ROLES else None
+
+
+def provider(case, info, follow_up):
+    """A carrier incident for the providers group; `follow_up` says where the carrier's ticket and news go."""
+    # Transports are named by their whole description: the provider is not always its second word (roles.py).
+    name = info.get('description') if info.get('role') == 'transport' else (info.get('provider') or info.get('description'))
+    fields = [('Proveedor', f'{name or "sin identificar"} ({info.get("label") or info.get("role")})'),
+              ('Estado', f'activo desde {local(case.opened_at)} · {case.drops} caída(s)')]
+    fields.append(('Enlace', info['summary']) if info.get('summary') else ('Puerto', f'«{info.get("description")}»'))
+    fields.append(('Seguimiento', follow_up))
+    return Message('CRÍTICO' if case.severity == 'critical' else 'ADVERTENCIA', title(case), fields, link=ref(case))
+
+
+def provider_recovered(case):
+    return Message('RESTABLECIDO · EN OBSERVACIÓN', title(case), [('Hora', local(case.resolved_at or case.last_state_at)),
+                                                                  ('Cierre', 'si sigue estable')])
+
+
+def provider_closed(case):
+    end = case.closed_at or case.resolved_at or case.last_state_at
+    return Message('CERRADO', title(case), [('Duración', span(end - case.opened_at)), ('Caídas', str(case.drops))])
 
 
 def external_group(cases):

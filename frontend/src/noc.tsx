@@ -162,7 +162,7 @@ export function CaseCommunication({ api, caseId, zone, onError }: { api: Api; ca
 type Group = { id: string; name: string; participants: number };
 
 /** One field to search the account's groups by name and pick one (a WhatsApp account can have hundreds). */
-function GroupPicker({ groups, value, onChange }: { groups: Group[]; value: string; onChange: (id: string) => void }) {
+function GroupPicker({ label, groups, value, onChange }: { label: string; groups: Group[]; value: string; onChange: (id: string) => void }) {
   const id = useId(),
     input = useRef<HTMLInputElement>(null),
     [open, setOpen] = useState(false),
@@ -179,7 +179,7 @@ function GroupPicker({ groups, value, onChange }: { groups: Group[]; value: stri
   return (
     <div className="device-select noc-group"
       onBlur={(e) => { if (!e.currentTarget.contains(e.relatedTarget as Node)) setOpen(false); }}>
-      <label htmlFor={id}>Grupo del NOC</label>
+      <label htmlFor={id}>{label}</label>
       <div className="device-combobox">
         <input id={id} ref={input} role="combobox" aria-expanded={open} aria-controls={id + "-options"}
           aria-autocomplete="list" aria-activedescendant={open && items[active] ? id + "-option-" + active : undefined}
@@ -220,11 +220,13 @@ function GroupPicker({ groups, value, onChange }: { groups: Group[]; value: stri
 
 function WhatsApp({ api, onError }: { api: Api; onError: (s: string) => void }) {
   const [data, setData] = useState<any>(null),
-    [group, setGroup] = useState("");
+    [group, setGroup] = useState(""),
+    [providers, setProviders] = useState("");
   const load = async () => {
     const d = await api("/noc/whatsapp");
     setData(d);
     setGroup((g) => g || d.group_id || "");
+    setProviders((g) => g || d.providers_group_id || "");
   };
   const { busy, run } = useRunner(onError, load);
   useEffect(() => {
@@ -261,7 +263,7 @@ function WhatsApp({ api, onError }: { api: Api; onError: (s: string) => void }) 
             });
           }}
         >
-          <GroupPicker groups={data.groups || []} value={group} onChange={setGroup} />
+          <GroupPicker label="Grupo del NOC" groups={data.groups || []} value={group} onChange={setGroup} />
           <button disabled={busy || !group || group === data.group_id}>Usar este grupo</button>
         </form>
       )}
@@ -270,6 +272,40 @@ function WhatsApp({ api, onError }: { api: Api; onError: (s: string) => void }) 
           Publica en <strong>{data.group_name}</strong>
           {data.paused && " · en pausa"}
           {data.last_error && <small> · último error: {data.last_error}</small>}
+        </p>
+      )}
+      {service.status === "ready" && (
+        <form
+          onSubmit={(e) => {
+            e.preventDefault();
+            void run(async () => {
+              await api("/noc/whatsapp/providers", "PUT", { group_id: providers });
+            });
+          }}
+        >
+          <GroupPicker label="Grupo de proveedores (opcional)" groups={(data.groups || []).filter((g: Group) => g.id !== data.group_id)}
+            value={providers} onChange={setProviders} />
+          <small className="muted">
+            Como el grupo de proveedores de Telegram: cada falla de tránsito, transporte, IXP o peering en su propio hilo hasta que se cierra.
+            Las respuestas en WhatsApp no llegan a ODIN: el ticket del proveedor se anota en el caso.
+          </small>
+          <div className="probe-actions">
+            <button disabled={busy || !providers || providers === data.providers_group_id}>Usar para proveedores</button>
+            {data.providers_group_id && (
+              <button type="button" className="quiet" disabled={busy} onClick={() => void run(async () => {
+                await api("/noc/whatsapp/providers", "PUT", { group_id: null });
+                setProviders("");
+              })}>
+                Dejar de publicar a proveedores
+              </button>
+            )}
+          </div>
+        </form>
+      )}
+      {data.providers_group_name && (
+        <p>
+          Fallas de proveedores en <strong>{data.providers_group_name}</strong>
+          {data.paused && " · en pausa"}
         </p>
       )}
       <div className="probe-actions">

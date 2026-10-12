@@ -39,7 +39,6 @@ CODE_SECONDS = 600
 RENOTIFY = 600  # a case that drops again after recovering is announced at most every 10 minutes
 KINDS = {'bgp_session': 'Sesión BGP', 'interface': 'Interfaz', 'latency': 'Latencia hacia', 'access': 'Caída de acceso en'}
 PERIODS = {'1h': 3600, '6h': 21600, '24h': 86400, '7d': 604800}
-CARRIER_ROLES = ('transit', 'transport', 'ixp', 'peering')
 VERDICTS = {'correct': '<b>[VALORACIÓN]</b> Correcto', 'partial': '<b>[VALORACIÓN]</b> Parcialmente correcto', 'incorrect': '<b>[VALORACIÓN]</b> Incorrecto'}
 stop = threading.Event()
 
@@ -99,10 +98,7 @@ def link(case):
 
 
 def case_text(db, case):
-    from .cases.api import isolation, related_cases
-    from .cases.entities import Resolver
-    alone = isolation(db, case, related_cases(db, case, Resolver(db))) if case.kind == 'bgp_session' else None
-    return messages.telegram(messages.case_alert(case, alone))
+    return messages.telegram(messages.case_alert(case, messages.isolation(db, case)))
 
 
 def external_text(cases):
@@ -160,21 +156,8 @@ def outbound(db, bot, st):
         db.delete(question);db.commit()
 
 
-def carrier(case):
-    """The port or neighbor summary of a case about a carrier link, or None."""
-    info = case.detail.get('neighbor') or case.detail.get('port') or {}
-    return info if info.get('role') in CARRIER_ROLES else None
-
-
 def provider_text(case, info):
-    # Transports are named by their whole description: the provider is not always its second word (roles.py).
-    name = info.get('description') if info.get('role') == 'transport' else (info.get('provider') or info.get('description'))
-    fields = [('Proveedor', f'{name or "sin identificar"} ({info.get("label") or info.get("role")})'),
-              ('Estado', f'activo desde {when(case.opened_at)} · {case.drops} caída(s)')]
-    fields.append(('Enlace', info['summary']) if info.get('summary') else ('Puerto', f'«{info.get("description")}»'))
-    fields.append(('Seguimiento', 'responder a este mensaje con el ticket del proveedor y sus novedades; queda como nota del caso'))
-    return messages.telegram(messages.Message('CRÍTICO' if case.severity == 'critical' else 'ADVERTENCIA', messages.title(case), fields,
-                                              link=messages.ref(case)))
+    return messages.telegram(messages.provider(case, info, 'responder a este mensaje con el ticket del proveedor y sus novedades; queda como nota del caso'))
 
 
 def providers(db, bot, st):
@@ -183,7 +166,7 @@ def providers(db, bot, st):
     stamp = now()
     known = set(db.scalars(select(TelegramProviderMessage.case_id)))
     for case in alerting(db):
-        info = carrier(case)
+        info = messages.carrier(case)
         if not info or case.id in known:continue
         message = send(bot, st.providers_chat_id, provider_text(case, info), thread=st.providers_thread_id)
         db.add(TelegramProviderMessage(case_id=case.id, chat_id=st.providers_chat_id, message_id=message['message_id'],

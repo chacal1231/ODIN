@@ -37,6 +37,10 @@ class GroupBody(BaseModel):
     group_id: str = Field(min_length=5, max_length=120)
 
 
+class ProvidersBody(BaseModel):
+    group_id: str | None = Field(default=None, min_length=5, max_length=120)  # None: stop posting carrier incidents
+
+
 class PauseBody(BaseModel):
     paused: bool
 
@@ -55,7 +59,8 @@ def router(current, admin):
         telegram, whatsapp = db.get(TelegramState, 'telegram'), whatsapp_state(db);db.commit()
         return {**reports.load(db), 'channels': reports.channels(db),
                 'telegram': {'group': bool(telegram and telegram.chat_id), 'paused': bool(telegram and telegram.paused)},
-                'whatsapp': {'group': whatsapp.group_name, 'paused': whatsapp.paused, 'last_error': whatsapp.last_error}}
+                'whatsapp': {'group': whatsapp.group_name, 'providers_group': whatsapp.providers_group_name, 'paused': whatsapp.paused,
+                             'last_error': whatsapp.last_error}}
 
     @api.put('/noc/settings')
     def put_settings(body: SettingsBody, user=Depends(admin), db: Session = Depends(get_db)):
@@ -110,7 +115,8 @@ def router(current, admin):
     @api.get('/noc/whatsapp')
     def whatsapp(user=Depends(admin), db: Session = Depends(get_db)):
         st = whatsapp_state(db);db.commit()
-        result = {'group_id': st.group_id, 'group_name': st.group_name, 'paused': st.paused, 'last_error': st.last_error}
+        result = {'group_id': st.group_id, 'group_name': st.group_name, 'providers_group_id': st.providers_group_id,
+                  'providers_group_name': st.providers_group_name, 'paused': st.paused, 'last_error': st.last_error}
         try:
             service = Service();result['service'] = service.status()
             result['groups'] = service.groups() if result['service'].get('status') == 'ready' else []
@@ -123,9 +129,26 @@ def router(current, admin):
         try:groups = {g['id']: g['name'] for g in Service().groups()}
         except WhatsAppError as exc:raise HTTPException(409, f'WhatsApp no está listo ({exc.code})')
         if body.group_id not in groups:raise HTTPException(422, 'Ese grupo no está en la cuenta vinculada')
-        st = whatsapp_state(db);st.group_id, st.group_name, st.last_error = body.group_id, groups[body.group_id][:200], None
+        st = whatsapp_state(db)
+        if body.group_id == st.providers_group_id:raise HTTPException(422, 'Ese es el grupo de proveedores: usa uno distinto')
+        st.group_id, st.group_name, st.last_error = body.group_id, groups[body.group_id][:200], None
         audit(db, 'whatsapp_group_bound', user.id, body.group_id);db.commit()
         return {'group_id': st.group_id, 'group_name': st.group_name}
+
+    @api.put('/noc/whatsapp/providers')
+    def choose_providers(body: ProvidersBody, user=Depends(admin), db: Session = Depends(get_db)):
+        st = whatsapp_state(db)
+        if body.group_id is None:
+            st.providers_group_id = st.providers_group_name = None
+            audit(db, 'whatsapp_providers_unbound', user.id);db.commit()
+            return {'providers_group_id': None, 'providers_group_name': None}
+        try:groups = {g['id']: g['name'] for g in Service().groups()}
+        except WhatsAppError as exc:raise HTTPException(409, f'WhatsApp no está listo ({exc.code})')
+        if body.group_id not in groups:raise HTTPException(422, 'Ese grupo no está en la cuenta vinculada')
+        if body.group_id == st.group_id:raise HTTPException(422, 'Usa un grupo distinto del grupo del NOC')
+        st.providers_group_id, st.providers_group_name, st.last_error = body.group_id, groups[body.group_id][:200], None
+        audit(db, 'whatsapp_providers_bound', user.id, body.group_id);db.commit()
+        return {'providers_group_id': st.providers_group_id, 'providers_group_name': st.providers_group_name}
 
     @api.post('/noc/whatsapp/pause')
     def pause(body: PauseBody, user=Depends(admin), db: Session = Depends(get_db)):
@@ -137,7 +160,7 @@ def router(current, admin):
     def logout(user=Depends(admin), db: Session = Depends(get_db)):
         try:Service().logout()
         except WhatsAppError as exc:raise HTTPException(409, f'No se pudo cerrar la sesión ({exc.code})')
-        st = whatsapp_state(db);st.group_id = st.group_name = None
+        st = whatsapp_state(db);st.group_id = st.group_name = st.providers_group_id = st.providers_group_name = None
         audit(db, 'whatsapp_logged_out', user.id);db.commit()
         return {'ok': True}
 
