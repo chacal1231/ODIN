@@ -112,7 +112,8 @@ def ingest(db, touched, stamp):
                             'Uplink de la misma OLT (SmartOLT)'));changed = True
         pons = [{'board': o.board, 'port': o.port, 'cause': o.cause, 'zone': o.zone, 'affected': o.affected, 'subscribers': o.subscribers,
                  'started_at': o.started_at or o.first_seen, 'odbs': o.odbs[:10]} for o in sorted(current, key=lambda x: (x.board, x.port))]
-        detail = {'scope': 'access', 'olt_id': olt.id, 'device_id': olt.device_id, 'pop_id': olt.pop_id, 'unreachable': unreachable,
+        # Only its own fields: impact and evidence totals belong to other passes of the correlator.
+        detail = {**before, 'scope': 'access', 'olt_id': olt.id, 'device_id': olt.device_id, 'pop_id': olt.pop_id, 'unreachable': unreachable,
                   'uplinks_down': down_links, 'pons': pons, 'affected': sum(p['affected'] for p in pons),
                   'subscribers': sum(p['subscribers'] for p in pons), 'zones': sorted({p['zone'] for p in pons if p['zone']})}
         if problem:

@@ -1061,3 +1061,11 @@ nav button {
     grid-template-columns: 1fr;
   }
 }
+
+/* Customer impact of an inbox item: confirmed impact stands out, potential stays quiet. */
+.inbox-main .inbox-impact {
+  display: block;
+}
+.inbox-main .inbox-impact.confirmed {
+  color: var(--error-text);
+}

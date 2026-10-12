@@ -11,6 +11,7 @@ Rules (version RULE_VERSION):
   when the neighbor or the interface is a transit, a transport or an internal link between own routers
   (read from the router port descriptions, see inventory/roles.py).
 - Access: one case per OLT with its PON outages, uplinks and reachability from SmartOLT (cases/access.py).
+- Impact: every open case carries how many customers it affects and where (cases/impact.py).
 - Paths: a latency case gets the traces taken when its incidents opened and recovered and the route changes of its
   checks in the period, before and after, network by network; a case of a router gets the route changes of checks whose
   path crosses it (known only with the inventory).
@@ -360,5 +361,7 @@ def run(db, stamp=None):
     for case in db.scalars(select(Case).where(Case.id.in_(touched))):
         enrich(db, resolver, case, stamp, network)
     judge(db, stamp)
+    from .impact import annotate
+    annotate(db, list(db.scalars(select(Case).where(Case.state != 'closed'))), network)
     state.last_run_at = stamp;state.last_success_at = stamp;state.last_error = None
     return more

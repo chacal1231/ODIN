@@ -192,6 +192,11 @@ function CaseDetail({ api, zone, admin, id, onSelect, onChange, onAsk, onDraft, 
         <td>{p.zone || "—"}</td><td>{(p.odbs || []).join(", ") || "—"}</td><td>{date(p.started_at)}</td></tr>)}</tbody>
     </table></div>}
     <dl className="event-detail">
+      {data.detail?.impact?.text && <><dt>Impacto en clientes</dt><dd>{data.detail.impact.text}
+        {data.detail.impact.olts?.length > 0 && <ul className="case-impact">{data.detail.impact.olts.map((o: any) => <li key={o.id}>
+          <a href={"#olt=" + o.id}>{o.name}</a>: {o.onus} ONUs{o.zones?.length ? ` · zonas ${o.zones.join(", ")}` : ""}
+          {o.confirmed ? " · con caída en SmartOLT" : o.other_link ? " · sigue con otro enlace" : ""}</li>)}</ul>}
+        <br /><small>Estimación de ODIN con SmartOLT y el inventario.</small></dd></>}
       <dt>Período</dt><dd>{date(data.opened_at)} — {data.closed_at ? date(data.closed_at) : "en curso"} ({duration(end - data.opened_at)})</dd>
       <dt>Cambios de estado</dt><dd>{data.kind === "latency" ? `${data.drops} incidentes de latencia, ${data.recoveries} cerrados` : `${data.drops} caídas y ${data.recoveries} recuperaciones`}</dd>
       {data.kind === "bgp_session" && <><dt>Qué es el vecino</dt><dd>{data.neighbor

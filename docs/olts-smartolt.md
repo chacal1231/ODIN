@@ -54,3 +54,16 @@ La lectura de ODIN, escrita para el nivel 1 que vigila e informa, sigue este ord
 Es crítico (avisa en la barra y por Telegram) si la OLT no es alcanzable, si hay un uplink caído, si hay un corte común o si afecta a 64 ONUs o más. Los demás también aparecen en la bandeja, porque el N1 informa toda caída de acceso; el caso reemplaza a las caídas sueltas de esa OLT.
 
 Con el inventario, la OLT se asocia a su equipo, y el caso muestra como relacionados la interfaz del router que llega a ella y los casos del mismo equipo o POP, así como las alertas de Zabbix o LibreNMS y los incidentes de sondeo de su gestión. El analista recibe la lectura y los PON con sus causas.
+
+## Impacto en clientes
+
+Cada caso abierto indica a cuántos clientes afecta y dónde ([impact.py](../backend/odin/cases/impact.py)), contando ONUs de SmartOLT por OLT y zona. La OLT se ubica en la red por los enlaces del inventario que la alcanzan, es decir, los puertos de router cuya subred contiene una dirección de la OLT.
+
+| Impacto | Cuándo | Ejemplo |
+|---|---|---|
+| Confirmado | SmartOLT reporta ONUs caídas: caso de acceso, o una OLT detrás del equipo con caso de acceso abierto | "Confirmado: 300 ONUs sin servicio en OLT-NORTE, detrás de esta interfaz" |
+| Potencial | Cae una interfaz o un equipo con OLTs detrás, pero SmartOLT no reporta caídas; se indica si la OLT sigue con otro enlace | "Potencial: 512 ONUs detrás de esta interfaz (OLT-NORTE 512)" |
+| Indirecto | Una salida a internet (tránsito, IXP, peering) o una caché interna de CDN | "Indirecto: salida a internet por CARRIER" |
+| Servicio | Un servicio externo: sus usuarios; las ONUs en línea son solo referencia, porque ODIN no mide el uso por cliente | "Los clientes que usan Netflix" |
+
+Sin SmartOLT o sin inventario, el caso lo dice en lugar de estimar. La bandeja ordena por impacto dentro de cada nivel: primero lo confirmado y lo que afecta a más clientes, después lo más antiguo. El impacto también aparece en Telegram y en el detalle del caso, y el analista lo recibe como estimación de ODIN.

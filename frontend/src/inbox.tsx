@@ -43,6 +43,7 @@ function Row({ item, now, zone, onNavigate, children }: { item: Item; now: numbe
           {item.where && detail ? " · " : ""}
           {detail}
         </small>
+        {item.impact && <small className={"inbox-impact" + (item.confirmed ? " confirmed" : "")}>👥 {item.impact}</small>}
         {children}
       </div>
       <span className="inbox-time" title={when(item.at, zone)}>{item.at ? ago(now - item.at) : ""}</span>

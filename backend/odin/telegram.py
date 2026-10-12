@@ -102,6 +102,8 @@ def case_text(db, case):
     lines = [f'🔴 <b>{esc(KINDS.get(case.kind, case.kind))} {esc(case.subject)}</b> · {esc(case.entity_label)}']
     if role.get('summary'):lines.append(esc(role['summary'], 600))
     elif role.get('description'):lines.append(f'{esc(role.get("label") or "sin clasificar")} «{esc(role["description"], 300)}»')
+    if case.kind == 'access' and (case.detail.get('reading') or {}).get('title'):lines.append(esc(case.detail['reading']['title'], 400))
+    if (case.detail.get('impact') or {}).get('text'):lines.append(f'👥 {esc(case.detail["impact"]["text"], 400)}')
     lines.append(f'Desde {when(case.opened_at)} · {"crítico" if case.severity == "critical" else "advertencia"}')
     alone = isolation(db, case, related_cases(db, case, Resolver(db))) if case.kind == 'bgp_session' else None
     if alone:lines.append(f'⚠️ {esc(alone, 400)}')

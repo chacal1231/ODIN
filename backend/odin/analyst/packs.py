@@ -236,6 +236,8 @@ def case_pack(db, case):
         neighbor_line(db, case, related),
         verdict_line(case) if external else '',
         access_line(case) if access else '',
+        f'Impacto en clientes (estimación de ODIN con SmartOLT y el inventario): {case.detail["impact"]["text"]}.'
+        if (case.detail.get('impact') or {}).get('text') else '',
         f'Período: desde {stamp_text(case.opened_at)} hasta {stamp_text(case.closed_at) if case.closed_at else "ahora (en curso)"}; '
         f'ventana de evidencias {stamp_text(start)} — {stamp_text(end)}.',
         (f'Logs de contexto: hay {" y ".join(capped)}; se guardaron los {CONTEXT_CAP // 2} primeros y los {CONTEXT_CAP // 2} últimos de cada tipo, '

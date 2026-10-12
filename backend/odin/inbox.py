@@ -25,8 +25,10 @@ def item(kind, id, link, severity, title, where='', detail='', at=None, **extra)
 def case_item(case, kind='case', **extra):
     role = case.detail.get('neighbor') or case.detail.get('port') or {}
     detail = (case.detail.get('reading') or {}).get('title', '') if case.kind == 'access' else role.get('summary') or role.get('label') or ''
+    impact = case.detail.get('impact') or {}
     return item(kind, case.id, '#caso=' + case.id, case.severity, f'{KINDS.get(case.kind, case.kind)} {case.subject}', case.entity_label,
-                detail, case.opened_at, drops=case.drops, **extra)
+                detail, case.opened_at, drops=case.drops, impact=impact.get('text'), onus=impact.get('onus', 0),
+                confirmed=impact.get('kind') == 'confirmed', **extra)
 
 
 def incident_item(row, names, kind='incident', **extra):
@@ -39,7 +41,7 @@ def outage_item(row, olts, kind='olt_outage', **extra):
     return item(kind, row.id, '#olt=' + row.olt_id, 'critical' if row.cause == 'los' else 'warning',
                 f'PON {row.board}/{row.port} · {CAUSES.get(row.cause, row.cause)}', olt.name if olt else row.olt_id,
                 f'{row.affected} de {row.subscribers} ONUs' + (f' · zona {row.zone}' if row.zone else '') +
-                (f' · {len(row.odbs)} splitters' if row.odbs else ''), row.started_at or row.first_seen, **extra)
+                (f' · {len(row.odbs)} splitters' if row.odbs else ''), row.started_at or row.first_seen, onus=row.affected, confirmed=True, **extra)
 
 
 def components(checks):
@@ -102,8 +104,9 @@ def build(db, stamp=None):
                  + [item('health', c['id'], None, c['state'], c['title'], c.get('page', ''), c['detail'], stamp, page=c.get('page'))
                     for c in checks])
     rank = {'critical': 0, 'warning': 1, 'info': 2}
-    # The network first, then ODIN's own health (also in the status bar); the oldest problem first within each.
-    attention.sort(key=lambda x: (rank.get(x['severity'], 3), x['kind'] == 'health', x['at'] or 0))
+    # The network first, then ODIN's own health (also in the status bar); within each level, confirmed customer impact
+    # first and the most customers first, then the oldest problem.
+    attention.sort(key=lambda x: (rank.get(x['severity'], 3), x['kind'] == 'health', not x.get('confirmed'), -(x.get('onus') or 0), x['at'] or 0))
     progress = ([case_item(c, acknowledged_by=acknowledgers.get(c.acknowledged_by), acknowledged_at=c.acknowledged_at) for c in alerts if c.acknowledged_at]
                 + [incident_item(r, names, acknowledged_by=acknowledgers.get(r.acknowledged_by), acknowledged_at=r.acknowledged_at)
                    for r in incidents if r.acknowledged_at]
