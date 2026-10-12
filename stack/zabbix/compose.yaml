@@ -1,0 +1,55 @@
+# Zabbix 7.0 LTS for ODIN: hosts and their problems, read by ODIN with a read-only API token.
+# Server + web (nginx) + PostgreSQL. Prepare it with ./setup.sh, which writes .env.
+# Server tuning (ZBX_STARTPOLLERS, ZBX_CACHESIZE…) goes in .env: the server reads every ZBX_* variable from it.
+name: odin-zabbix
+x-logging: &logging
+  driver: json-file
+  options: {max-size: 10m, max-file: '3'}
+x-db: &db
+  DB_SERVER_HOST: db
+  POSTGRES_DB: zabbix
+  POSTGRES_USER: zabbix
+  POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Ejecuta ./setup.sh}
+services:
+  db:
+    image: postgres:17.11-alpine
+    environment: *db
+    shm_size: 256m
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: [CMD-SHELL, 'pg_isready -U zabbix -d zabbix']
+      interval: 5s
+      timeout: 3s
+      retries: 20
+    logging: *logging
+    restart: unless-stopped
+  server:
+    image: zabbix/zabbix-server-pgsql:alpine-7.0.31
+    env_file: .env
+    environment: *db
+    ports:
+      # Active agents and trappers; the server polls SNMP and passive agents outbound.
+      - ${BIND_IP:?Ejecuta ./setup.sh}:${ZABBIX_SERVER_PORT:-10051}:10051
+    depends_on:
+      db:
+        condition: service_healthy
+    logging: *logging
+    restart: unless-stopped
+  web:
+    image: zabbix/zabbix-web-nginx-pgsql:alpine-7.0.31
+    environment:
+      <<: *db
+      ZBX_SERVER_HOST: server
+      ZBX_SERVER_NAME: Zabbix
+      PHP_TZ: ${TZ:-America/Bogota}
+    ports:
+      # Web and API (ODIN reads /api_jsonrpc.php here).
+      - ${BIND_IP}:${ZABBIX_WEB_PORT:-8081}:8080
+    depends_on:
+      db:
+        condition: service_healthy
+    logging: *logging
+    restart: unless-stopped
+volumes:
+  postgres_data:

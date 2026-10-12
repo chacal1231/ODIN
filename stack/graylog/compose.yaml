@@ -1,0 +1,67 @@
+# Graylog for ODIN: receives the routers' syslog and lets ODIN read it with a read-only token.
+# Graylog server + Data Node (managed OpenSearch) + MongoDB. Prepare it with ./setup.sh, which writes .env.
+name: odin-graylog
+x-logging: &logging
+  driver: json-file
+  options: {max-size: 10m, max-file: '3'}
+services:
+  mongodb:
+    image: mongo:7.0.43
+    volumes:
+      - mongodb_data:/data/db
+      - mongodb_config:/data/configdb
+    healthcheck:
+      test: [CMD, mongosh, --quiet, --eval, 'db.runCommand({ ping: 1 }).ok']
+      interval: 10s
+      timeout: 5s
+      retries: 12
+    logging: *logging
+    restart: unless-stopped
+  datanode:
+    image: graylog/graylog-datanode:7.1.10
+    hostname: datanode
+    environment:
+      GRAYLOG_DATANODE_NODE_ID_FILE: /var/lib/graylog-datanode/node-id
+      GRAYLOG_DATANODE_PASSWORD_SECRET: ${GRAYLOG_PASSWORD_SECRET:?Ejecuta ./setup.sh}
+      GRAYLOG_DATANODE_MONGODB_URI: mongodb://mongodb:27017/graylog
+      GRAYLOG_DATANODE_OPENSEARCH_HEAP: ${DATANODE_HEAP:-4g}
+    ulimits:
+      memlock: {soft: -1, hard: -1}
+      nofile: {soft: 65536, hard: 65536}
+    volumes:
+      - datanode_data:/var/lib/graylog-datanode
+    depends_on:
+      mongodb:
+        condition: service_healthy
+    logging: *logging
+    restart: unless-stopped
+  graylog:
+    image: graylog/graylog:7.1.10
+    hostname: server
+    environment:
+      GRAYLOG_NODE_ID_FILE: /usr/share/graylog/data/data/node-id
+      GRAYLOG_PASSWORD_SECRET: ${GRAYLOG_PASSWORD_SECRET:?Ejecuta ./setup.sh}
+      GRAYLOG_ROOT_PASSWORD_SHA2: ${GRAYLOG_ROOT_PASSWORD_SHA2:?Ejecuta ./setup.sh}
+      GRAYLOG_ROOT_TIMEZONE: ${TZ:-America/Bogota}
+      GRAYLOG_HTTP_BIND_ADDRESS: 0.0.0.0:9000
+      GRAYLOG_HTTP_EXTERNAL_URI: http://${BIND_IP:?Ejecuta ./setup.sh}:${GRAYLOG_PORT:-9000}/
+      GRAYLOG_MONGODB_URI: mongodb://mongodb:27017/graylog
+      GRAYLOG_SERVER_JAVA_OPTS: -Xms${GRAYLOG_HEAP:-2g} -Xmx${GRAYLOG_HEAP:-2g} -XX:+UseG1GC -server
+    ports:
+      # Web and API (ODIN reads here); routers send syslog to 514/udp. Only on the chosen address.
+      - ${BIND_IP}:${GRAYLOG_PORT:-9000}:9000
+      - ${BIND_IP}:${SYSLOG_PORT:-514}:1514/udp
+    volumes:
+      - graylog_data:/usr/share/graylog/data/data
+      - graylog_journal:/usr/share/graylog/data/journal
+    depends_on:
+      mongodb:
+        condition: service_healthy
+    logging: *logging
+    restart: unless-stopped
+volumes:
+  mongodb_data:
+  mongodb_config:
+  datanode_data:
+  graylog_data:
+  graylog_journal:

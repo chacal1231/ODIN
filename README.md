@@ -28,7 +28,7 @@ ODIN **solo lee** las fuentes: no configura equipos, no reinicia ONUs y no abre 
 
 - Un servidor Linux con Docker Engine y Docker Compose v2.24 o posterior. En Debian y Ubuntu, el script de instalación los instala si faltan. No hace falta instalar Node ni Python en el host.
 - Orientativo para un ISP mediano: 4 vCPU, 8 GB de RAM y 50 GB de disco. El sondeador usa hasta 2 CPU y 1,5 GB; WhatsApp (Chromium), hasta 1 GB.
-- Que el servidor llegue a las fuentes del ISP (LibreNMS, Zabbix, Graylog), a internet (SmartOLT, Telegram, WhatsApp y, si se elige, DeepSeek) y a los destinos que mide.
+- Que el servidor llegue a las fuentes del ISP (LibreNMS, Zabbix, Graylog). Si falta alguna, [`stack/`](stack/README.md) instala cada una lista para ODIN. También debe llegar a internet (SmartOLT, Telegram, WhatsApp y, si se elige, DeepSeek) y a los destinos que mide.
 - **Resolver con los DNS recursivos del ISP**, no con resolvedores públicos. Así las CDN (YouTube, Netflix, TikTok) le entregan a ODIN el mismo nodo que a los clientes.
 
 Arquitectura, servicios, límites de recursos y conexiones salientes: [Arquitectura](docs/arquitectura.md).

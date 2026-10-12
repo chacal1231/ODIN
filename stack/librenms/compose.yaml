@@ -1,0 +1,88 @@
+# LibreNMS for ODIN: devices, ports with their addresses and descriptions, and alerts, read by ODIN with a read-only
+# API token. Web + dispatcher (pollers) + MariaDB + Redis. Prepare it with ./setup.sh, which writes .env.
+# Logs go to Graylog (stack/graylog), so LibreNMS's own syslog and trap receivers are not included.
+name: odin-librenms
+x-logging: &logging
+  driver: json-file
+  options: {max-size: 10m, max-file: '3'}
+x-librenms: &librenms
+  TZ: ${TZ:-America/Bogota}
+  PUID: '1000'
+  PGID: '1000'
+  DB_HOST: db
+  DB_NAME: librenms
+  DB_USER: librenms
+  DB_PASSWORD: ${DB_PASSWORD:?Ejecuta ./setup.sh}
+  DB_TIMEOUT: '60'
+  CACHE_DRIVER: redis
+  SESSION_DRIVER: redis
+  REDIS_HOST: redis
+  MEMORY_LIMIT: 512M
+  OPCACHE_MEM_SIZE: '128'
+  LIBRENMS_SNMP_COMMUNITY: ${SNMP_COMMUNITY:-public}
+services:
+  db:
+    image: mariadb:11.4.13
+    command:
+      - mariadbd
+      - --innodb-file-per-table=1
+      - --lower-case-table-names=0
+      - --character-set-server=utf8mb4
+      - --collation-server=utf8mb4_unicode_ci
+      - --innodb-buffer-pool-size=${DB_BUFFER_POOL:-1G}
+    environment:
+      MARIADB_RANDOM_ROOT_PASSWORD: 'yes'
+      MARIADB_DATABASE: librenms
+      MARIADB_USER: librenms
+      MARIADB_PASSWORD: ${DB_PASSWORD}
+    volumes:
+      - mariadb_data:/var/lib/mysql
+    healthcheck:
+      test: [CMD, healthcheck.sh, --connect, --innodb_initialized]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+    logging: *logging
+    restart: unless-stopped
+  redis:
+    image: redis:7.4.11-alpine
+    healthcheck:
+      test: [CMD, redis-cli, ping]
+      interval: 10s
+      timeout: 3s
+      retries: 6
+    logging: *logging
+    restart: unless-stopped
+  librenms:
+    image: librenms/librenms:26.9.1.1
+    # fping and SNMP polling need raw sockets.
+    cap_add: [NET_ADMIN, NET_RAW]
+    environment: *librenms
+    ports:
+      # Web and API (ODIN reads /api/v0 here).
+      - ${BIND_IP:?Ejecuta ./setup.sh}:${LIBRENMS_PORT:-8000}:8000
+    volumes:
+      - librenms_data:/data
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    logging: *logging
+    restart: unless-stopped
+  dispatcher:
+    image: librenms/librenms:26.9.1.1
+    cap_add: [NET_ADMIN, NET_RAW]
+    environment:
+      <<: *librenms
+      DISPATCHER_NODE_ID: dispatcher1
+      SIDECAR_DISPATCHER: '1'
+    volumes:
+      - librenms_data:/data
+    depends_on:
+      - librenms
+    logging: *logging
+    restart: unless-stopped
+volumes:
+  mariadb_data:
+  librenms_data:

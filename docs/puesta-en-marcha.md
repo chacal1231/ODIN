@@ -22,6 +22,8 @@ ODIN solo lee. Conviene darle a cada fuente una credencial que **tampoco pueda e
 - **Graylog**: un token de un usuario con lectura sobre el stream de los routers.
 - **SmartOLT**: la API key de cliente. Si SmartOLT lo permite, restringirla a la IP del servidor ODIN.
 
+Si el ISP no tiene alguna de estas fuentes, [`stack/`](../stack/README.md) instala LibreNMS, Zabbix o Graylog, cada uno en su servidor. Su script crea la credencial de solo lectura y muestra el endpoint, la red permitida y el token para este asistente.
+
 En LibreNMS, Zabbix y Graylog también se indican las **redes permitidas**: la IP, o la red, donde vive ese servidor. ODIN se niega a conectarse a cualquier otra dirección, aunque el DNS apunte a otro lado. SmartOLT, DeepSeek y Telegram son servicios públicos: ODIN solo acepta direcciones públicas para ellos.
 
 ## Paso 2: cómo reconoce ODIN a los proveedores
