@@ -15,9 +15,9 @@ class Settings(BaseSettings):
     map_tile_url: str = 'https://tile.openstreetmap.org/{z}/{x}/{y}.png'
     # The operator this installation serves, shown beside ODIN (one installation per ISP).
     isp_name: str = ''
-    probe_concurrency: int = 24
-    probe_max_addresses: int = 256
-    trace_concurrency: int = 4
+    probe_concurrency: int = 32
+    probe_max_addresses: int = 384
+    trace_concurrency: int = 8
     idle_seconds: int = 1800
     session_seconds: int = 43200
 

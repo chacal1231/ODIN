@@ -79,8 +79,9 @@ services:
     security_opt: [no-new-privileges:true]
     read_only: true
     tmpfs: [/tmp]
-    mem_limit: 1g
-    pids_limit: 128
+    # 32 workers: each TCP/HTTPS round is a ~20 MB Python process, plus DNS resolution subprocesses.
+    mem_limit: 1536m
+    pids_limit: 256
     cpus: 2.0
     depends_on:
       migrate:

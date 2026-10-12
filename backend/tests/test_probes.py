@@ -101,6 +101,17 @@ def test_jitter_within_rounds_thresholds_and_old_series():
         assert not conditions
 
 
+def test_icmp_capacity_counts_one_fping_per_check(monkeypatch):
+    from odin.probes import service
+    with session() as db:
+        t=target(db);t.approved_ips=['192.0.2.%d'%n for n in range(1,17)];db.commit()
+        # 8 s every 30 s whatever the addresses: fits 0.7 workers, sixteen times that would not.
+        monkeypatch.setattr(service,'settings',lambda:SimpleNamespace(probe_concurrency=1,probe_max_addresses=16))
+        service.capacity(db)
+        monkeypatch.setattr(service,'settings',lambda:SimpleNamespace(probe_concurrency=1,probe_max_addresses=15))
+        with pytest.raises(ValueError):service.capacity(db)
+
+
 def test_unreachable_requires_valid_rounds_and_recovery_window():
     c=ProbeConfig().model_dump();m={'warm':False,'coverage':.3,'p95_ms':None,'loss_percent':100}
     conditions,counters={},{}

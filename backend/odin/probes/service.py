@@ -33,7 +33,8 @@ def capacity(db):
         budget=duration(config,count)
         if target.protocol!='icmp' and budget+5>=min(75,config['interval_seconds']*.8):
             raise ValueError('La ronda supera el intervalo. Reduce intentos o aumenta el intervalo.')
-        cost+=(budget if target.protocol!='icmp' else count*budget)/config['interval_seconds']
+        # One fping process measures every address of a check within the same time; TCP/HTTPS budget already counts them.
+        cost+=budget/config['interval_seconds']
     if total>settings().probe_max_addresses or cost>settings().probe_concurrency*0.7:
         raise ValueError('Se supera la capacidad del sondeador. Reduce destinos, paquetes o aumenta el intervalo.')
 
