@@ -1,0 +1,139 @@
+{
+  "category": "HYPERSCALERS",
+  "version": 2,
+  "providers": [
+    {
+      "provider": "AWS",
+      "asn": 16509,
+      "targets": [
+        {
+          "name": "AWS-IAD",
+          "city": "N. Virginia",
+          "country": "US",
+          "region": "us-east-1",
+          "target": "ec2.us-east-1.amazonaws.com",
+          "protocol": "tcp",
+          "port": 443,
+          "scope": "regional"
+        },
+        {
+          "name": "AWS-GRU",
+          "city": "Sao Paulo",
+          "country": "BR",
+          "region": "sa-east-1",
+          "target": "ec2.sa-east-1.amazonaws.com",
+          "protocol": "tcp",
+          "port": 443,
+          "scope": "regional"
+        },
+        {
+          "name": "AWS-QRO",
+          "city": "Queretaro",
+          "country": "MX",
+          "region": "mx-central-1",
+          "target": "ec2.mx-central-1.amazonaws.com",
+          "protocol": "tcp",
+          "port": 443,
+          "scope": "regional"
+        }
+      ]
+    },
+    {
+      "provider": "GOOGLE",
+      "asn": 15169,
+      "targets": [
+        {
+          "name": "GOOGLE-DNS-1",
+          "target": "8.8.8.8",
+          "protocol": "icmp",
+          "scope": "anycast"
+        },
+        {
+          "name": "GOOGLE-DNS-2",
+          "target": "8.8.4.4",
+          "protocol": "icmp",
+          "scope": "anycast"
+        },
+        {
+          "name": "GOOGLE-WEB",
+          "target": "www.google.com",
+          "protocol": "https",
+          "port": 443,
+          "scope": "edge"
+        },
+        {
+          "name": "GCP-CHS",
+          "city": "Moncks Corner",
+          "country": "US",
+          "region": "us-east1",
+          "target": "logging.us-east1.rep.googleapis.com",
+          "protocol": "tcp",
+          "port": 443,
+          "scope": "regional"
+        },
+        {
+          "name": "GCP-GRU",
+          "city": "Sao Paulo",
+          "country": "BR",
+          "region": "southamerica-east1",
+          "target": "logging.southamerica-east1.rep.googleapis.com",
+          "protocol": "tcp",
+          "port": 443,
+          "scope": "regional"
+        }
+      ]
+    },
+    {
+      "provider": "MICROSOFT",
+      "asn": 8075,
+      "targets": [
+        {
+          "name": "AZURE-IAD",
+          "city": "Virginia",
+          "country": "US",
+          "region": "eastus",
+          "target": "eastus.handler.control.monitor.azure.com",
+          "protocol": "tcp",
+          "port": 443,
+          "scope": "regional"
+        },
+        {
+          "name": "AZURE-SAT",
+          "city": "Texas",
+          "country": "US",
+          "region": "southcentralus",
+          "target": "southcentralus.handler.control.monitor.azure.com",
+          "protocol": "tcp",
+          "port": 443,
+          "scope": "regional"
+        },
+        {
+          "name": "AZURE-GRU",
+          "city": "Sao Paulo",
+          "country": "BR",
+          "region": "brazilsouth",
+          "target": "brazilsouth.handler.control.monitor.azure.com",
+          "protocol": "tcp",
+          "port": 443,
+          "scope": "regional"
+        }
+      ]
+    },
+    {
+      "provider": "ORACLE",
+      "asn": 31898,
+      "targets": [
+        {
+          "name": "OCI-BOG",
+          "city": "Bogota",
+          "country": "CO",
+          "region": "sa-bogota-1",
+          "target": "objectstorage.sa-bogota-1.oraclecloud.com",
+          "protocol": "tcp",
+          "port": 443,
+          "scope": "regional"
+        }
+      ]
+    }
+  ]
+}

@@ -13,7 +13,7 @@ from ..security import audit
 from .config import (host,TransportConfig,DEFAULT_VERSION_ID,TRANSPORT_VERSION_ID,GAMES_VERSION_ID,seed_defaults)
 from .catalog import CATEGORIES
 from .organization import ensure_destination
-from .service import lock,capacity,next_slot,snapshot
+from .service import lock,capacity,next_slot,snapshot,changed
 from .resolver import resolve_task,ProbeError
 from . import fping,transport
 
@@ -22,9 +22,9 @@ CATEGORY_BY_NAME={c['name']:c['id'] for c in CATEGORIES}
 # ICMP profile per category; a provider's border router answers from its control plane and keeps the standard one.
 ICMP_VERSIONS={'juegos':GAMES_VERSION_ID}
 DATA=Path(__file__).parent/'data'
-# Loaded on every start: games are activated, hyperscalers stay validated until an operator activates them,
-# so the probe keeps capacity for the own network. Order is activation priority under the capacity budget.
-STARTUP=[('juegos-v1.json',True),('hyperscalers-v1.json',False)]
+# Loaded and activated on every start, in priority order under the capacity budget. Hyperscalers v2 keeps only the
+# regions the ISP's traffic reaches (Bogotá, US East/South, México, São Paulo); v1 stays as the full reference.
+STARTUP=[('juegos-v1.json',True),('hyperscalers-v2.json',True)]
 DESCRIPTIONS={'border':'Router de borde del proveedor, no el servidor: responde ICMP desde su plano de control y puede limitarlo. '
                        'Sirve para seguir la entrada a su red cuando los servidores no responden.'}
 
@@ -74,14 +74,25 @@ class Catalog(BaseModel):
         return self
 
 
+def retire(db,category,keys):
+    """A newer version archives the checks it drops; one an operator activated keeps measuring until they archive it."""
+    for target in db.scalars(select(ProbeTarget).where(ProbeTarget.catalog_key.like(category+':%'),ProbeTarget.archived.is_(False))):
+        if target.catalog_key in keys or target.enabled:continue
+        target.archived=True;target.version+=1;changed(db,target,'target_archived')
+        audit(db,'probe_catalog_target_retired',None,target.id)
+
+
 def persist(document):
     catalog=Catalog(**document);digest=hashlib.sha256(json.dumps(document,sort_keys=True).encode()).hexdigest()
     ids=[];category=CATEGORY_BY_NAME[catalog.category]
     with session() as db:
         seed_defaults(db);lock(db)
         source=db.get(ProbeCatalog,category)
-        if source and (source.version!=catalog.version or source.digest!=digest):
-            raise ValueError('El catálogo guardado difiere. Requiere una migración explícita para conservar ediciones.')
+        if source and (source.version>catalog.version or (source.version==catalog.version and source.digest!=digest)):
+            raise ValueError('El catálogo guardado difiere. Publica el cambio con una versión mayor.')
+        if source and source.version<catalog.version:
+            retire(db,category,{f'{category}:{p.provider}:{t.name}' for p in catalog.providers for t in p.targets})
+            source.version=catalog.version;source.document=document;source.digest=digest
         if not source:db.add(ProbeCatalog(id=category,version=catalog.version,document=document,digest=digest))
         for provider in catalog.providers:
             service=provider.service or PROVIDERS[provider.provider]
@@ -169,7 +180,7 @@ def startup():
 
 def main():
     parser=argparse.ArgumentParser(description=__doc__)
-    parser.add_argument('path',nargs='?',default=str(DATA/'hyperscalers-v1.json'))
+    parser.add_argument('path',nargs='?',default=str(DATA/'hyperscalers-v2.json'))
     parser.add_argument('--activate',action='store_true')
     parser.add_argument('--startup',action='store_true',help='Carga los catálogos de arranque con su política de activación')
     args=parser.parse_args()

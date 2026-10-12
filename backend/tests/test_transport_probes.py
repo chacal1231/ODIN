@@ -39,8 +39,26 @@ def test_catalog_persistence_idempotent_and_preserves_edits():
     with session() as db:
         assert db.scalar(select(func.count()).select_from(ProbeTarget))==105
         assert db.get(ProbeTarget,target.id).description=='Edición NOC'
-    source['version']=2
+    # Edits need a higher version; an older one never replaces what is stored.
+    source['providers'][0]['targets'][0]['city']='Otra'
     with pytest.raises(ValueError):import_catalog.persist(source)
+    source['version']=0
+    with pytest.raises(ValueError):import_catalog.persist(source)
+
+
+def test_newer_catalog_retires_dropped_checks_but_not_active_ones():
+    ids=import_catalog.persist(document())
+    with session() as db:
+        kept=db.scalar(select(ProbeTarget).where(ProbeTarget.name=='AWS-IAD'))
+        active=db.scalar(select(ProbeTarget).where(ProbeTarget.name=='AWS-SYD'));active.enabled=True;db.commit()
+    v2=json.loads((Path(import_catalog.__file__).parent/'data/hyperscalers-v2.json').read_text())
+    assert len(import_catalog.persist(v2))==12
+    with session() as db:
+        assert db.get(ProbeCatalog,'hyperscalers').version==2
+        live=db.scalars(select(ProbeTarget).where(ProbeTarget.archived.is_(False))).all()
+        assert {t.name for t in live}=={t['name'] for p in v2['providers'] for t in p['targets']}|{'AWS-SYD'}
+        assert db.get(ProbeTarget,kept.id).epoch==kept.epoch and db.get(ProbeTarget,active.id).enabled
+        assert db.scalar(select(func.count()).select_from(ProbeTarget).where(ProbeTarget.archived.is_(True)))==len(ids)-13
 
 
 def test_games_catalog_profiles_borders_and_references():
@@ -70,12 +88,12 @@ def test_startup_activates_games_validates_hyperscalers_and_preserves_pauses(mon
         games=db.scalars(select(ProbeTarget).where(ProbeTarget.catalog_key.like('juegos:%'))).all()
         clouds=db.scalars(select(ProbeTarget).where(ProbeTarget.catalog_key.like('hyperscalers:%'))).all()
         assert len(games)==21 and all(t.enabled for t in games)
-        assert len(clouds)==105 and not any(t.enabled for t in clouds) and all(t.validation['status']=='validated' for t in clouds)
+        assert len(clouds)==12 and all(t.enabled for t in clouds)
         paused=games[0];paused.enabled=False;db.commit()
     assert import_catalog.startup()==0
     with session() as db:
         assert not db.get(ProbeTarget,paused.id).enabled
-        assert db.scalar(select(func.count()).select_from(ProbeTarget))==126
+        assert db.scalar(select(func.count()).select_from(ProbeTarget))==33
     # A catalog that cannot be stored is reported without stopping the next one.
     monkeypatch.setattr(import_catalog,'STARTUP',[('missing.json',True),('juegos-v1.json',True)])
     assert import_catalog.startup()==1

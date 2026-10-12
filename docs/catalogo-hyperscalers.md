@@ -6,7 +6,7 @@ La migración `0006_transport_probes` añade los protocolos y el catálogo sin r
 
 ## Importación y activación
 
-El servicio `catalogs` de `compose.yaml` se ejecuta una vez en cada arranque (`import_catalog --startup`): guarda y valida este catálogo sin activarlo, para conservar capacidad del sondeador para la red propia; los destinos se activan desde Destinos. Para hacerlo a mano:
+El servicio `catalogs` de `compose.yaml` se ejecuta una vez en cada arranque (`import_catalog --startup`) y carga y activa `hyperscalers-v2.json`: 12 destinos con las regiones a las que llega el tráfico del ISP. Son Oracle Bogotá (línea base nacional), AWS us-east-1/México/São Paulo, Azure East US/South Central/Brazil South, GCP us-east1/São Paulo, búsqueda de Google y DNS 8.8.8.8/8.8.4.4. Las demás regiones y las IPv6 (el servidor no tiene ruta IPv6) quedan en `hyperscalers-v1.json` como referencia, sin cargarse. Para hacerlo a mano:
 
 ```bash
 # Guarda el catálogo y comprueba cada endpoint; mantiene los destinos desactivados.
@@ -15,7 +15,7 @@ docker compose exec -T probe python -m odin.probes.import_catalog
 docker compose exec -T probe python -m odin.probes.import_catalog --activate
 ```
 
-La importación es idempotente por destino. Conserva ajustes, destinos archivados y destinos que el operador haya pausado después de su activación. Un documento diferente exige una migración explícita; no sobrescribe silenciosamente el catálogo existente. Un fallo deja el destino registrado, desactivado y con fecha/motivo de validación visible. Reintentar la importación permite completar las altas pendientes. Las pruebas manuales se consultan en Últimas ejecuciones y no activan destinos ni generan incidentes.
+La importación es idempotente por destino. Conserva ajustes, destinos archivados y destinos que el operador haya pausado después de su activación. Un documento distinto con la misma versión, o con una versión menor, se rechaza: no sobrescribe silenciosamente el catálogo existente. Una versión mayor reemplaza el documento, mantiene con su historial los destinos que siguen, y archiva los que salen, salvo los que un operador haya activado: esos siguen midiendo hasta que se archiven a mano. Un fallo deja el destino registrado, desactivado y con fecha/motivo de validación visible. Reintentar la importación permite completar las altas pendientes. Las pruebas manuales se consultan en Últimas ejecuciones y no activan destinos ni generan incidentes.
 
 ## Mediciones
 
