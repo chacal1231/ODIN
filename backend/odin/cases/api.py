@@ -70,11 +70,22 @@ def related_cases(db, case, resolver):
     same_pop = pop_keys(db, case)
     external = case.kind == LATENCY and case.detail.get('scope') == 'external'
     mine_link = case.detail.get('neighbor') or {}
+    # Router ports that reach an OLT of an access case: their interface cases are its likely upstream cause.
+    access = [c for c in [case] + overlapping_access(db, case, start, end) if c.kind == 'access' and c.detail.get('device_id')]
+    reaching = {}
+    if access:
+        from ..inventory.roles import Network
+        network = Network(db)
+        reaching = {c.id: {('device:' + d, port) for d, port in network.links_to(c.detail['device_id'])} for c in access}
     overlapping = list(db.scalars(select(Case).where(Case.id != case.id, Case.opened_at <= end,
         func.coalesce(Case.closed_at, Case.last_activity_at) >= start).order_by(Case.opened_at).limit(200)))
     related = []
     for other in overlapping:
-        if case.kind == 'bgp_session' and other.kind == 'bgp_session' and other.entity_key != case.entity_key and (
+        if case.kind == 'access' and other.kind == 'interface' and (other.entity_key, other.subject) in reaching.get(case.id, ()):
+            related.append({**view(other), 'relation': 'Interfaz del router que llega a esta OLT'})
+        elif case.kind == 'interface' and other.kind == 'access' and (case.entity_key, case.subject) in reaching.get(other.id, ()):
+            related.append({**view(other), 'relation': 'OLT que cuelga de esta interfaz'})
+        elif case.kind == 'bgp_session' and other.kind == 'bgp_session' and other.entity_key != case.entity_key and (
                 (owner.get(case.subject) == other.entity_key and other.subject in mine)):
             related.append({**view(other), 'relation': 'Otro extremo de la misma sesión BGP'})
         elif case.kind == 'bgp_session' and other.kind == 'bgp_session' and other.entity_key != case.entity_key and same_link(case.subject, other.subject):
@@ -90,6 +101,11 @@ def related_cases(db, case, resolver):
         elif external:
             related.append({**view(other), 'relation': 'Mismo período, solo coincidencia temporal'})
     return related
+
+
+def overlapping_access(db, case, start, end):
+    if case.kind != 'interface':return []
+    return list(db.scalars(select(Case).where(Case.kind == 'access', Case.opened_at <= end, func.coalesce(Case.closed_at, Case.last_activity_at) >= start)))
 
 
 def isolation(db, case, related):
@@ -111,7 +127,7 @@ def router(current, admin):
     api = APIRouter(prefix='/api/v1/cases')
 
     @api.get('')
-    def cases(state: str = Query('open', pattern='^(open|alerting|active|stale|closed|all)$'), kind: str | None = Query(None, pattern='^(bgp_session|interface|latency)$'),
+    def cases(state: str = Query('open', pattern='^(open|alerting|active|stale|closed|all)$'), kind: str | None = Query(None, pattern='^(bgp_session|interface|latency|access)$'),
               before: str | None = Query(None, max_length=60), limit: int = Query(50, ge=1, le=100),
               user=Depends(current), db: Session = Depends(get_db)):
         query = select(Case)

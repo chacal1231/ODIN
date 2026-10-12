@@ -1,6 +1,6 @@
 # OLTs con SmartOLT
 
-ODIN lee las OLTs del ISP desde su cuenta de SmartOLT (una cuenta por instalación) y las muestra en **Monitoreo → OLTs**. Esta entrega cubre el inventario y las caídas de PON. Los eventos en tiempo real y los casos llegan en la siguiente.
+ODIN lee las OLTs del ISP desde su cuenta de SmartOLT (una cuenta por instalación) y las muestra en **Monitoreo → OLTs**. Cubre el inventario, las caídas de PON y los casos de acceso que arma con ellas.
 
 ## Solo lectura
 
@@ -35,3 +35,22 @@ Si SmartOLT permite restringir la API key por IP, limitarla a la IP del servidor
 - **Uplinks y puertos PON**: estado, ONUs en línea, señal media, potencia TX y cuántas ONUs tienen señal crítica o en advertencia, según la clasificación de SmartOLT.
 
 Si la lectura de caídas lleva más de 20 minutos sin éxito, o si la API limita las llamadas, aparece en la barra de estado.
+
+## Casos de acceso
+
+El correlador abre **un caso por OLT** ([access.py](../backend/odin/cases/access.py)) cuando tiene caídas de PON, un uplink caído o SmartOLT no la alcanza, y lo da por recuperado cuando no queda ninguna. Cada caída, uplink y cambio de alcance queda como evidencia con su hora; el caso muestra los PON afectados, las ONUs, las zonas y los splitters. Las caídas de más de 7 días (stale) quedan fuera: ya son conocidas.
+
+La lectura de ODIN, escrita para el nivel 1 que vigila e informa, sigue este orden:
+
+| Situación | Lectura | Acción para N1 |
+|---|---|---|
+| SmartOLT no alcanza la OLT | La OLT, su energía o su uplink | Informar caída de la OLT; N2 revisa energía y uplink |
+| Uplink caído | Causa probable de lo que muestran sus PON | Informar; N2 revisa el enlace hacia el POP |
+| LOS en 2 o más PON que empiezan juntos (10 min) | Corte común (tramo o tarjeta) | Informar corte en las zonas; N2 despacha a campo |
+| LOS en un PON | Corte en la distribución de ese PON | Informar corte en la zona; N2 despacha a campo |
+| Falla de energía (power) | Las ONUs de los clientes perdieron energía | Informar falla eléctrica; no es la red, no requiere despacho |
+| Sin conexión (offline) | Sin causa que SmartOLT pueda identificar | Informar y vigilar |
+
+Es crítico (avisa en la barra y por Telegram) si la OLT no es alcanzable, si hay un uplink caído, si hay un corte común o si afecta a 64 ONUs o más. Los demás también aparecen en la bandeja, porque el N1 informa toda caída de acceso; el caso reemplaza a las caídas sueltas de esa OLT.
+
+Con el inventario, la OLT se asocia a su equipo, y el caso muestra como relacionados la interfaz del router que llega a ella y los casos del mismo equipo o POP, así como las alertas de Zabbix o LibreNMS y los incidentes de sondeo de su gestión. El analista recibe la lectura y los PON con sus causas.

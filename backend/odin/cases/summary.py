@@ -5,6 +5,7 @@ permanent red count in the status bar would only teach people to ignore it) and:
 - sessions and interfaces: its neighbor or interface is a transit, a transport or an internal link
   (read from the router port descriptions), or the drop is sustained (critical by the correlator rules);
 - latency of the own network: critical;
+- access (OLT and PON): critical by the access rules (OLT unreachable, uplink down, a common fiber cut or many customers);
 - external services: when ODIN's verdict blames the own network or one exit (probes/verdict.py); a service that
   fails alone through a healthy exit is shown, not alerted. Without a verdict, when EXTERNAL_TOGETHER or more
   services are degraded at once.
@@ -20,7 +21,7 @@ from . import correlator
 EXTERNAL_TOGETHER = 3
 DAYS = 7
 GROUPS = {'vital': 'Tránsito, transporte o enlace interno', 'sustained': 'Otras caídas sostenidas', 'latency': 'Latencia crítica de red propia',
-          'external': 'Servicios externos: falla propia o de una salida'}
+          'external': 'Servicios externos: falla propia o de una salida', 'access': 'Caídas de acceso críticas (OLT, uplink o corte de fibra)'}
 
 
 def external(case):
@@ -32,6 +33,8 @@ def group(case, together):
     if case.kind in ('bgp_session', 'interface'):
         if critical(case.detail.get('neighbor') or case.detail.get('port')):return 'vital'
         return 'sustained' if case.severity == 'critical' else None
+    if case.kind == 'access':
+        return 'access' if case.severity == 'critical' else None
     if external(case):
         verdict = (case.detail.get('verdict') or {}).get('state')
         if verdict in ('own', 'exit'):return 'external'

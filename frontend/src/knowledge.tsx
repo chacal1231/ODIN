@@ -3,7 +3,7 @@ import { FormEvent, useEffect, useState } from "react";
 type Api = (path: string, method?: string, body?: unknown) => Promise<any>;
 export type KnowledgeDraft = { title: string; body: string; case_kind: string; keywords: string; source_case_id?: string };
 
-const kindNames: Record<string, string> = { "": "Cualquier caso", bgp_session: "Sesiones BGP", interface: "Interfaces", latency: "Latencia" };
+const kindNames: Record<string, string> = { "": "Cualquier caso", bgp_session: "Sesiones BGP", interface: "Interfaces", latency: "Latencia", access: "Acceso (OLT y PON)" };
 const empty: KnowledgeDraft = { title: "", body: "", case_kind: "", keywords: "" };
 
 export function KnowledgePanel({ api, admin, draft, focusId, onDone }: {

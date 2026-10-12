@@ -10,6 +10,7 @@ Rules (version RULE_VERSION):
 - Critical: down for SUSTAINED seconds or at least FLAP_CRITICAL drops in the case, or from the first drop
   when the neighbor or the interface is a transit, a transport or an internal link between own routers
   (read from the router port descriptions, see inventory/roles.py).
+- Access: one case per OLT with its PON outages, uplinks and reachability from SmartOLT (cases/access.py).
 - Paths: a latency case gets the traces taken when its incidents opened and recovered and the route changes of its
   checks in the period, before and after, network by network; a case of a router gets the route changes of checks whose
   path crosses it (known only with the inventory).
@@ -24,6 +25,8 @@ from ..models import (Case, CaseEvidence, SourceEvent, EventStream, ProbeInciden
                       MonitoringDestination, CorrelationState, now)
 from .entities import Resolver, Entity
 from ..inventory import roles
+from . import access
+from .access import ACCESS
 
 RULE_VERSION = 4
 QUIET = 1800
@@ -56,12 +59,12 @@ def case_key(kind, entity_key, subject):
 
 def close(case):
     case.state = 'closed';case.closed_at = case.resolved_at or case.last_activity_at
-    if case.kind != LATENCY:case.severity = 'critical' if case.drops >= FLAP_CRITICAL else case.severity
+    if case.kind not in (LATENCY, ACCESS):case.severity = 'critical' if case.drops >= FLAP_CRITICAL else case.severity
 
 
 def case_entity(resolver, case):
     """The equipment (or external service) a case is about."""
-    if case.kind != LATENCY:
+    if case.kind not in (LATENCY, ACCESS):
         return resolver.entity('graylog', case.detail.get('source_name', ''))
     device_id = case.detail.get('device_id')
     if device_id:
@@ -173,12 +176,13 @@ def lifecycle(db, resolver, stamp, touched):
         entity = case_entity(resolver, case)
         # Identity can strengthen later (an association gets confirmed): follow it when the new key is free.
         key = case_key(case.kind, entity.key, case.subject)
-        if key != case.key and not db.scalar(select(Case.id).where(Case.key == key, Case.state != 'closed')):
+        # An access case is keyed by its OLT, whatever device the inventory matches it to.
+        if case.kind != ACCESS and key != case.key and not db.scalar(select(Case.id).where(Case.key == key, Case.state != 'closed')):
             case.key, case.entity_key, case.entity_label = key, entity.key, entity.label;touched.add(case.id)
         if case.last_state == 'up' and stamp - case.last_activity_at > QUIET:
             close(case);touched.add(case.id);continue
-        if case.kind == LATENCY:
-            # An open incident is ongoing by definition: the detector keeps evaluating it, so it never goes stale.
+        if case.kind in (LATENCY, ACCESS):
+            # An open incident or outage is ongoing by definition: its source keeps reporting it, so it never goes stale.
             if case.state == 'stale':case.state = 'active'
         else:
             if case.last_state == 'down' and stamp - case.last_activity_at > STALE and case.state == 'active':
@@ -348,6 +352,7 @@ def run(db, stamp=None):
     touched = set()
     more = ingest(db, resolver, state, touched)
     more = ingest_latency(db, touched) or more
+    access.ingest(db, touched, stamp)
     db.flush()
     lifecycle(db, resolver, stamp, touched)
     db.flush()

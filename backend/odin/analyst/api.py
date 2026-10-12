@@ -53,7 +53,7 @@ class MessageBody(BaseModel):
 class KnowledgeBody(BaseModel):
     title: str = Field(min_length=3, max_length=200)
     body: str = Field(min_length=1, max_length=5000)
-    case_kind: str | None = Field(default=None, pattern='^(bgp_session|interface|latency)$')
+    case_kind: str | None = Field(default=None, pattern='^(bgp_session|interface|latency|access)$')
     keywords: list[str] = Field(default_factory=list, max_length=20)
     source_case_id: str | None = Field(default=None, max_length=36)
 

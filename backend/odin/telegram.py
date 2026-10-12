@@ -34,7 +34,7 @@ from .security import audit, decrypt
 ZONE = ZoneInfo('America/Bogota')
 CODE_SECONDS = 600
 RENOTIFY = 600  # a case that drops again after recovering is announced at most every 10 minutes
-KINDS = {'bgp_session': 'Sesión BGP', 'interface': 'Interfaz', 'latency': 'Latencia hacia'}
+KINDS = {'bgp_session': 'Sesión BGP', 'interface': 'Interfaz', 'latency': 'Latencia hacia', 'access': 'Caída de acceso en'}
 PERIODS = {'1h': 3600, '6h': 21600, '24h': 86400, '7d': 604800}
 CARRIER_ROLES = ('transit', 'transport', 'ixp', 'peering')
 VERDICTS = {'correct': '✅ Correcto', 'partial': '🟡 Parcialmente correcto', 'incorrect': '❌ Incorrecto'}

@@ -13,9 +13,9 @@ from dataclasses import dataclass, field
 from sqlalchemy import select
 from ..models import (Case, CaseEvidence, CaseNote, EventCollector, Integration, User, now)
 
-SOURCES = {'graylog': 'logs', 'zabbix': 'Zabbix', 'librenms': 'LibreNMS', 'probe': 'latencia', 'trace': 'trazas'}
+SOURCES = {'graylog': 'logs', 'zabbix': 'Zabbix', 'librenms': 'LibreNMS', 'probe': 'latencia', 'trace': 'trazas', 'smartolt': 'SmartOLT'}
 ROLES = {'trigger': 'cambio de estado', 'context': 'contexto', 'impact': 'impacto'}
-KINDS = {'bgp_session': 'sesión BGP', 'interface': 'interfaz', 'latency': 'latencia hacia'}
+KINDS = {'bgp_session': 'sesión BGP', 'interface': 'interfaz', 'latency': 'latencia hacia', 'access': 'caída de acceso en la OLT'}
 NEAR = 300
 TITLE = 400
 
@@ -171,6 +171,17 @@ def neighbor_line(db, case, related):
     return f'Vecino según el inventario: {found["summary"]}.' + (f' {alone}' if alone else '')
 
 
+def access_line(case):
+    """What the OLT shows now and ODIN's deterministic reading of it."""
+    d, reading = case.detail, case.detail.get('reading') or {}
+    pons = '; '.join(f'PON {p["board"]}/{p["port"]} {p["cause"]} {p["affected"]} de {p["subscribers"]} ONUs zona {p["zone"] or "—"}'
+                     for p in d.get('pons', [])[:20])
+    return '\n'.join(filter(None, [
+        f'OLT: {"SmartOLT no la alcanza" if d.get("unreachable") else "alcanzable"}; uplinks caídos: {", ".join(d.get("uplinks_down") or []) or "ninguno"}.',
+        f'PON con caídas activas: {pons}.' if pons else 'Sin caídas de PON activas.',
+        f'Lectura de ODIN (reglas sobre los datos de SmartOLT, no es una causa confirmada): {reading["title"]}.' if reading.get('title') else '']))
+
+
 def verdict_line(case):
     """ODIN's reading of where an external service fails, from comparing services and their exits."""
     verdict = case.detail.get('verdict')
@@ -209,7 +220,11 @@ def case_pack(db, case):
     totals = case.detail.get('context_total') or {}
     capped = [f'{n} logs {"del mismo sujeto" if k == "entity" else "del mismo equipo"}' for k, n in totals.items() if n > CONTEXT_CAP]
     external = latency and case.detail.get('scope') == 'external'
-    subject = (f'Caso: degradación de latencia o pérdida hacia el servicio externo {case.subject} (todas sus regiones), medida desde el servidor ODIN. '
+    access = case.kind == 'access'
+    subject = (f'Caso: caída de acceso en la OLT {case.subject} ({case.entity_label}), según SmartOLT. Causas por PON: LOS es pérdida de señal '
+               '(corte de fibra), power es falla de energía en las ONUs de los clientes, offline es sin conexión sin causa clara. '
+               'Las evidencias de SmartOLT son el síntoma; alertas y casos del mismo equipo o POP son posibles causas.' if access else
+               f'Caso: degradación de latencia o pérdida hacia el servicio externo {case.subject} (todas sus regiones), medida desde el servidor ODIN. '
                'No comparte equipo con la red propia: los casos relacionados solo coinciden en el tiempo.' if external else
                f'Caso: degradación de latencia o pérdida hacia el destino {case.subject} del equipo {case.entity_label}, medida desde el servidor ODIN. '
                'Las líneas de latencia son el síntoma; logs, alertas y casos relacionados del mismo equipo o POP son posibles causas.' if latency else
@@ -220,6 +235,7 @@ def case_pack(db, case):
         f'VRF: {case.detail["vrf"]}.' if case.detail.get('vrf') else '',
         neighbor_line(db, case, related),
         verdict_line(case) if external else '',
+        access_line(case) if access else '',
         f'Período: desde {stamp_text(case.opened_at)} hasta {stamp_text(case.closed_at) if case.closed_at else "ahora (en curso)"}; '
         f'ventana de evidencias {stamp_text(start)} — {stamp_text(end)}.',
         (f'Logs de contexto: hay {" y ".join(capped)}; se guardaron los {CONTEXT_CAP // 2} primeros y los {CONTEXT_CAP // 2} últimos de cada tipo, '

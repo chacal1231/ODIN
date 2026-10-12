@@ -8,7 +8,8 @@ import { KnowledgePanel, KnowledgeDraft } from "./knowledge";
 
 type Api = (path: string, method?: string, body?: unknown) => Promise<any>;
 
-const kinds: Record<string, string> = { bgp_session: "Sesión BGP", interface: "Interfaz", latency: "Latencia hacia" };
+const kinds: Record<string, string> = { bgp_session: "Sesión BGP", interface: "Interfaz", latency: "Latencia hacia", access: "Acceso" };
+const causes: Record<string, string> = { los: "Corte de fibra (LOS)", power: "Falla de energía", offline: "Sin conexión" };
 // What the neighbor or the interface is, as the correlator read it from the router port descriptions.
 const role = (c: any) => {
   const n = c.detail?.neighbor || c.detail?.port;
@@ -18,7 +19,7 @@ const role = (c: any) => {
 const down = (c: any) => c.kind === "latency" ? (c.last_state === "down" ? "degradado" : "normal") : (c.last_state === "down" ? "caída" : "restablecida");
 const states: Record<string, string> = { active: "Activo", stale: "Sin actividad", closed: "Cerrado" };
 const filters: [string, string][] = [["alerting", "Avisan en la barra"], ["open", "Abiertos"], ["active", "Activos"], ["stale", "Sin actividad"], ["closed", "Cerrados"], ["all", "Todos"]];
-const sources: Record<string, string> = { graylog: "Logs", zabbix: "Zabbix", librenms: "LibreNMS", probe: "Latencia", trace: "Traza" };
+const sources: Record<string, string> = { graylog: "Logs", zabbix: "Zabbix", librenms: "LibreNMS", probe: "Latencia", trace: "Traza", smartolt: "SmartOLT" };
 const roles: Record<string, string> = { trigger: "Cambio de estado", context: "Contexto", impact: "Impacto" };
 const strengths: Record<string, string> = { entity: "Mismo vecino o interfaz", device: "Mismo equipo", time: "Solo coincidencia temporal" };
 
@@ -180,6 +181,16 @@ function CaseDetail({ api, zone, admin, id, onSelect, onChange, onAsk, onDraft, 
       {data.detail.verdict.route_change && <> La ruta cambió: antes salía por {data.detail.verdict.route_change.before}, ahora por {data.detail.verdict.route_change.after}.</>}
       <br /><small>Compara los servicios según su salida, desde un solo punto de medición; no es una causa confirmada.</small>
     </p>}
+    {data.kind === "access" && data.detail?.reading && <p className={"notice" + (data.severity === "critical" && data.last_state === "down" ? " verdict own" : "")}>
+      <strong>Lectura de ODIN: {data.detail.reading.title}.</strong> {data.last_state === "down" && data.detail.reading.action}
+      <br /><small>Reglas sobre los datos de SmartOLT; no es una causa confirmada.</small>
+    </p>}
+    {data.kind === "access" && !!data.detail?.pons?.length && <div className="probe-table"><table>
+      <thead><tr><th>PON</th><th>Causa</th><th>ONUs afectadas</th><th>Zona</th><th>Splitters</th><th>Desde</th></tr></thead>
+      <tbody>{data.detail.pons.map((p: any) => <tr key={p.board + "/" + p.port + p.cause}>
+        <td className="mono">{p.board}/{p.port}</td><td>{causes[p.cause] || p.cause}</td><td>{p.affected} de {p.subscribers}</td>
+        <td>{p.zone || "—"}</td><td>{(p.odbs || []).join(", ") || "—"}</td><td>{date(p.started_at)}</td></tr>)}</tbody>
+    </table></div>}
     <dl className="event-detail">
       <dt>Período</dt><dd>{date(data.opened_at)} — {data.closed_at ? date(data.closed_at) : "en curso"} ({duration(end - data.opened_at)})</dd>
       <dt>Cambios de estado</dt><dd>{data.kind === "latency" ? `${data.drops} incidentes de latencia, ${data.recoveries} cerrados` : `${data.drops} caídas y ${data.recoveries} recuperaciones`}</dd>
@@ -188,6 +199,9 @@ function CaseDetail({ api, zone, admin, id, onSelect, onChange, onAsk, onDraft, 
         : "Ninguna interfaz del inventario contiene su IP (multihop o equipo sin IP en LibreNMS)"}</dd></>}
       {data.kind === "interface" && data.port && <><dt>Qué es la interfaz</dt><dd><span className="badge">{role(data) || "Sin clasificar"}</span> «{data.port.description}»</dd></>}
       {data.detail?.vrf && <><dt>VRF</dt><dd>{data.detail.vrf}</dd></>}
+      {data.kind === "access" && <><dt>OLT</dt><dd>{data.subject} · {data.detail?.unreachable ? "SmartOLT no la alcanza" : "alcanzable"}
+        {!!data.detail?.uplinks_down?.length && <> · uplinks caídos: {data.detail.uplinks_down.join(", ")}</>}
+        {data.detail?.affected > 0 && <> · {data.detail.affected} ONUs afectadas</>} · <a href={"#olt=" + data.detail?.olt_id}>Ver la OLT</a></dd></>}
       {data.detail?.scope === "external"
         ? <><dt>Servicio externo</dt><dd>Todas sus regiones. No comparte equipo con la red propia: los casos relacionados solo coinciden en el tiempo.</dd></>
         : <><dt>Identidad del equipo</dt><dd>{data.identity || "Solo el nombre de los logs"}{!data.entity_confirmed && " · sin vínculo confirmado con el inventario"}</dd></>}

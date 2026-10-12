@@ -11,7 +11,7 @@ from .models import (Analysis, AnalysisReview, Case, CaseNote, Olt, OltOutage, O
 
 SHIFT = 12 * 3600
 LIMIT = 50
-KINDS = {'bgp_session': 'Sesión BGP', 'interface': 'Interfaz', 'latency': 'Latencia hacia'}
+KINDS = {'bgp_session': 'Sesión BGP', 'interface': 'Interfaz', 'latency': 'Latencia hacia', 'access': 'Acceso'}
 CAUSES = {'los': 'Corte de fibra (LOS)', 'power': 'Falla de energía', 'offline': 'Sin conexión'}
 # Health checks grouped into the components shown in the inbox strip.
 COMPONENTS = (('probe', 'Sondeador'), ('tracer', 'Trazador'), ('smartolt', 'SmartOLT'), ('analyst', 'Analista'),
@@ -24,8 +24,9 @@ def item(kind, id, link, severity, title, where='', detail='', at=None, **extra)
 
 def case_item(case, kind='case', **extra):
     role = case.detail.get('neighbor') or case.detail.get('port') or {}
+    detail = (case.detail.get('reading') or {}).get('title', '') if case.kind == 'access' else role.get('summary') or role.get('label') or ''
     return item(kind, case.id, '#caso=' + case.id, case.severity, f'{KINDS.get(case.kind, case.kind)} {case.subject}', case.entity_label,
-                role.get('summary') or role.get('label') or '', case.opened_at, drops=case.drops, **extra)
+                detail, case.opened_at, drops=case.drops, **extra)
 
 
 def incident_item(row, names, kind='incident', **extra):
@@ -55,12 +56,17 @@ def build(db, stamp=None):
     from .health import evaluate
     stamp = stamp or now();since = stamp - SHIFT
     alerts = alerting(db)
+    # Level 1 reports every access outage: its case stands for the OLT's outages, uplinks and reach, alerting or not.
+    access = [c for c in db.scalars(select(Case).where(Case.kind == 'access', Case.state == 'active')) if c not in alerts]
+    alerts += access
+    covered = {c.detail.get('olt_id') for c in alerts if c.kind == 'access'}
     incidents = list(db.scalars(select(ProbeIncident).where(ProbeIncident.closed_at.is_(None)).order_by(ProbeIncident.opened_at)))
     recovered = list(db.scalars(select(ProbeIncident).where(ProbeIncident.closed_at >= since).order_by(ProbeIncident.closed_at.desc()).limit(LIMIT)))
     target_ids = {r.target_id for r in incidents + recovered}
     names = dict(db.execute(select(ProbeTarget.id, ProbeTarget.name).where(ProbeTarget.id.in_(target_ids))).all()) if target_ids else {}
     olts = {o.id: o for o in db.scalars(select(Olt))}
-    outages = list(db.scalars(select(OltOutage).where(OltOutage.active.is_(True), OltOutage.cause != 'stale').order_by(OltOutage.first_seen)))
+    outages = [o for o in db.scalars(select(OltOutage).where(OltOutage.active.is_(True), OltOutage.cause != 'stale').order_by(OltOutage.first_seen))
+               if o.olt_id not in covered]
     ended = list(db.scalars(select(OltOutage).where(OltOutage.ended_at >= since, OltOutage.cause != 'stale').order_by(OltOutage.ended_at.desc()).limit(LIMIT)))
     reviewed = exists().where(AnalysisReview.analysis_id == Analysis.id)
     unreviewed = list(db.scalars(select(Analysis).where(Analysis.kind == 'case', Analysis.status == 'done', Analysis.finished_at >= stamp - 86400,
@@ -80,13 +86,13 @@ def build(db, stamp=None):
     acknowledgers = {u.id: u.username for u in db.scalars(select(User))}
     checks = evaluate(db, stamp)['checks']
     uplinks_down = [u for u in db.scalars(select(OltUplink).where(OltUplink.admin_status == 'Enabled'))
-                    if u.status.lower() == 'down' and olts.get(u.olt_id) and olts[u.olt_id].present]
+                    if u.status.lower() == 'down' and olts.get(u.olt_id) and olts[u.olt_id].present and u.olt_id not in covered]
 
     attention = ([case_item(c) for c in alerts if not c.acknowledged_at]
                  + [incident_item(r, names) for r in incidents if not r.acknowledged_at]
                  + [outage_item(o, olts) for o in outages]
                  + [item('olt', o.id, '#olt=' + o.id, 'critical', 'OLT inalcanzable', o.name, 'SmartOLT no llega a la OLT', o.last_seen)
-                    for o in olts.values() if o.present and not o.reachable]
+                    for o in olts.values() if o.present and not o.reachable and o.id not in covered]
                  + [item('olt', u.olt_id + ':' + u.name, '#olt=' + u.olt_id, 'critical', f'Uplink {u.name} caído', olts[u.olt_id].name,
                          u.description, u.last_seen) for u in uplinks_down]
                  + [item('review', a.id, '#caso=' + a.case_id, 'info', 'Valora el diagnóstico de ODIN',
