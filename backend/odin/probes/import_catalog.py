@@ -21,6 +21,10 @@ PROVIDERS={'AWS':'AWS','GOOGLE':'GCP','MICROSOFT':'Azure','ORACLE':'Oracle','IBM
 CATEGORY_BY_NAME={c['name']:c['id'] for c in CATEGORIES}
 # ICMP profile per category; a provider's border router answers from its control plane and keeps the standard one.
 ICMP_VERSIONS={'juegos':GAMES_VERSION_ID}
+DATA=Path(__file__).parent/'data'
+# Loaded on every start: games are activated, hyperscalers stay validated until an operator activates them,
+# so the probe keeps capacity for the own network. Order is activation priority under the capacity budget.
+STARTUP=[('juegos-v1.json',True),('hyperscalers-v1.json',False)]
 DESCRIPTIONS={'border':'Router de borde del proveedor, no el servidor: responde ICMP desde su plano de control y puede limitarlo. '
                        'Sirve para seguir la entrada a su red cuando los servidores no responden.'}
 
@@ -145,15 +149,32 @@ def validate_one(key,activate):
         return {'name':target.name,'status':target.validation['status'],'enabled':target.enabled,'error':error}
 
 
+def load(path,activate):
+    ids=persist(json.loads(Path(path).read_text()))
+    print(json.dumps({'catalog':Path(path).name,'stored':len(ids)}),flush=True)
+    with ThreadPoolExecutor(max_workers=6) as pool:
+        for result in pool.map(lambda key:validate_one(key,activate),ids):print(json.dumps(result),flush=True)
+
+
+def startup():
+    """Idempotent: targets already validated, paused or archived are preserved; failed ones are retried."""
+    failed=False
+    for name,activate in STARTUP:
+        # One catalog that cannot be stored (e.g. edited file without migration) must not block the others.
+        try:load(DATA/name,activate)
+        except Exception as exc:
+            failed=True;print(json.dumps({'catalog':name,'error':str(exc)[:300]}),flush=True)
+    return 1 if failed else 0
+
+
 def main():
     parser=argparse.ArgumentParser(description=__doc__)
-    parser.add_argument('path',nargs='?',default=str(Path(__file__).parent/'data'/'hyperscalers-v1.json'))
+    parser.add_argument('path',nargs='?',default=str(DATA/'hyperscalers-v1.json'))
     parser.add_argument('--activate',action='store_true')
-    args=parser.parse_args();document=json.loads(Path(args.path).read_text())
-    ids=persist(document)
-    print(json.dumps({'stored':len(ids)}),flush=True)
-    with ThreadPoolExecutor(max_workers=6) as pool:
-        for result in pool.map(lambda key:validate_one(key,args.activate),ids):print(json.dumps(result),flush=True)
+    parser.add_argument('--startup',action='store_true',help='Carga los catálogos de arranque con su política de activación')
+    args=parser.parse_args()
+    if args.startup:raise SystemExit(startup())
+    load(args.path,args.activate)
 
 
 if __name__=='__main__':main()

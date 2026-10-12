@@ -61,6 +61,26 @@ def test_games_catalog_profiles_borders_and_references():
         assert games['SUPERCELL-1'].profile_version_id==TRANSPORT_VERSION_ID
 
 
+def test_startup_activates_games_validates_hyperscalers_and_preserves_pauses(monkeypatch):
+    monkeypatch.setattr(import_catalog,'resolve_task',lambda task:['192.0.2.10'])
+    ok=lambda addresses,*args:{ip:{'sent':1,'received':1,'samples':[1]} for ip in addresses}
+    monkeypatch.setattr(import_catalog.fping,'run',ok);monkeypatch.setattr(import_catalog.transport,'run',ok)
+    assert import_catalog.startup()==0
+    with session() as db:
+        games=db.scalars(select(ProbeTarget).where(ProbeTarget.catalog_key.like('juegos:%'))).all()
+        clouds=db.scalars(select(ProbeTarget).where(ProbeTarget.catalog_key.like('hyperscalers:%'))).all()
+        assert len(games)==21 and all(t.enabled for t in games)
+        assert len(clouds)==105 and not any(t.enabled for t in clouds) and all(t.validation['status']=='validated' for t in clouds)
+        paused=games[0];paused.enabled=False;db.commit()
+    assert import_catalog.startup()==0
+    with session() as db:
+        assert not db.get(ProbeTarget,paused.id).enabled
+        assert db.scalar(select(func.count()).select_from(ProbeTarget))==126
+    # A catalog that cannot be stored is reported without stopping the next one.
+    monkeypatch.setattr(import_catalog,'STARTUP',[('missing.json',True),('juegos-v1.json',True)])
+    assert import_catalog.startup()==1
+
+
 @pytest.mark.parametrize('change',[{'category':'RED PROPIA'},{'category':'OTRA'},{'providers':[{'provider':'X','asn':1,'targets':[
     {'name':'X-1','target':'192.0.2.1','protocol':'icmp','scope':'regional'}]}]}])
 def test_catalog_rejects_own_network_unknown_category_and_missing_service(change):

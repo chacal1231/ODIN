@@ -48,6 +48,8 @@ Respaldar PostgreSQL antes del despliegue. Verificar migración, IDs/épocas/con
 
 ## Catálogos y juegos
 
+En cada arranque, el servicio `catalogs` ejecuta `import_catalog --startup`: carga juegos y los activa, y carga hyperscalers solo validados. Es idempotente: conserva destinos validados, pausados o archivados y reintenta los que fallaron. Un catálogo que no se puede guardar se reporta sin detener los demás. Si la capacidad del sondeador se agota, los destinos restantes quedan sin activar con el error `probe_capacity`.
+
 `python -m odin.probes.import_catalog <archivo>` carga un catálogo revisado de cualquier categoría (salvo Red propia), crea los destinos desactivados y los valida; `--activate` activa los que pasan. Sin argumento carga `hyperscalers-v1.json`; `data/juegos-v1.json` contiene los servidores de juego observados en flujos (Akvorado) que responden a ICMP, Supercell por TCP 9339 y los routers de borde de Riot y Blizzard, cuyos servidores no responden. Un borde mide la entrada a la red del proveedor, no el servidor, y usa el perfil Estándar porque su plano de control limita ICMP. Las IP de servidores de juego rotan: revisar el catálogo con los flujos cada mes.
 
 Cada destino de catálogo guarda su ASN de referencia. Una traza que no llega al destino pero cuyo último salto con respuesta está dentro de ese ASN se marca como "Llegó a la red del destino" y se compara para detectar cambios de ruta, también durante un incidente con el destino caído.

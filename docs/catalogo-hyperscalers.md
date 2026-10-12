@@ -6,6 +6,8 @@ La migración `0006_transport_probes` añade los protocolos y el catálogo sin r
 
 ## Importación y activación
 
+El servicio `catalogs` de `compose.yaml` se ejecuta una vez en cada arranque (`import_catalog --startup`): guarda y valida este catálogo sin activarlo, para conservar capacidad del sondeador para la red propia; los destinos se activan desde Destinos. Para hacerlo a mano:
+
 ```bash
 # Guarda el catálogo y comprueba cada endpoint; mantiene los destinos desactivados.
 docker compose exec -T probe python -m odin.probes.import_catalog

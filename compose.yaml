@@ -111,6 +111,26 @@ services:
       migrate:
         condition: service_completed_successfully
     restart: unless-stopped
+  catalogs:
+    # One-shot on every start: loads the reviewed catalogs and validates them from the probe's network.
+    build:
+      context: ./backend
+      dockerfile: Dockerfile.probe
+    env_file: .env
+    volumes:
+      - ./.secrets/master.key:/run/secrets/master.key:ro
+    command: [python, -m, odin.probes.import_catalog, --startup]
+    cap_drop: [ALL]
+    cap_add: [NET_RAW]
+    security_opt: [no-new-privileges:true]
+    read_only: true
+    tmpfs: [/tmp]
+    mem_limit: 512m
+    pids_limit: 64
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+    restart: 'no'
   web:
     build: ./frontend
     ports:
