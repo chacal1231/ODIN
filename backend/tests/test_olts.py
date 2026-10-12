@@ -264,3 +264,10 @@ def test_health_reports_a_stopped_reader_and_the_budget():
         assert [c['title'] for c in smartolt_checks(db, stamp)] == ['Presupuesto de SmartOLT casi agotado']
         db.get(SmartoltState, 'smartolt').blocked_until = stamp + 300;db.commit()
         assert [c['title'] for c in smartolt_checks(db, stamp)] == ['SmartOLT limitó las llamadas']
+
+
+def test_huawei_pon_status_and_unused_pon():
+    from odin.olts.api import down, pon_down
+    assert not down('Enabled', 'Up / Autofind') and down('Enabled', 'Down / Autofind') and not down('Disabled', 'Down')
+    assert not pon_down(OltPonPort(admin_status='Enabled', status='Down / Autofind', onus=0))
+    assert pon_down(OltPonPort(admin_status='Enabled', status='Down / Autofind', onus=4))

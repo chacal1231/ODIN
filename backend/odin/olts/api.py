@@ -20,8 +20,16 @@ class OltBody(BaseModel):
 
 
 def down(admin_status, status):
-    """An enabled port that is not up; a disabled one is not a fault."""
-    return admin_status.lower() == 'enabled' and status.lower() not in ('up', '') and not status[:1].isdigit()
+    """An enabled port that is not up; a disabled one is not a fault.
+
+    Huawei PONs come as 'Up / Autofind': only the state before the slash counts."""
+    status = status.split('/')[0].strip().lower()
+    return admin_status.lower() == 'enabled' and status not in ('up', '') and not status[:1].isdigit()
+
+
+def pon_down(pon):
+    """A PON without registered ONUs is an unused port (Huawei keeps it Down), not an outage."""
+    return bool(pon.onus) and down(pon.admin_status, pon.status)
 
 
 def source_view(db):
@@ -40,7 +48,7 @@ def olt_view(olt, pons, uplinks, outages, names):
     return {'id': olt.id, 'name': olt.name, 'hardware': olt.hardware, 'ip': olt.ip, 'device_id': olt.device_id,
             'device_name': names['devices'].get(olt.device_id), 'pop_id': olt.pop_id, 'pop_name': names['pops'].get(olt.pop_id),
             'pop_manual': olt.pop_manual, 'uptime_seconds': olt.uptime_seconds, 'temperature': olt.temperature, 'reachable': olt.reachable,
-            'present': olt.present, 'last_seen': olt.last_seen, 'pons': len(pons), 'pons_down': sum(down(p.admin_status, p.status) for p in pons),
+            'present': olt.present, 'last_seen': olt.last_seen, 'pons': len(pons), 'pons_down': sum(pon_down(p) for p in pons),
             'onus': sum(p.onus for p in pons), 'online': sum(p.online for p in pons), 'uplinks': len(uplinks),
             'uplinks_down': sum(down(u.admin_status, u.status) for u in uplinks),
             'outages': sum(o.cause != 'stale' for o in outages), 'affected': sum(o.affected for o in outages if o.cause != 'stale')}
@@ -91,7 +99,7 @@ def router(current, admin):
         view = olt_view(row, pons, uplinks, active, names(db, [row]))
         view['pon_ports'] = [{**{k: getattr(p, k) for k in ('board', 'port', 'pon_type', 'admin_status', 'status', 'description', 'tx_power', 'onus',
                                                           'online', 'average_signal', 'last_seen')},
-                              'down': down(p.admin_status, p.status), **signals.get((p.board, p.port), {'critical': 0, 'warning': 0}),
+                              'down': pon_down(p), **signals.get((p.board, p.port), {'critical': 0, 'warning': 0}),
                               'outage': next((o.cause for o in active if (o.board, o.port) == (p.board, p.port)), None)} for p in pons]
         view['uplink_ports'] = [{**{k: getattr(u, k) for k in ('name', 'description', 'kind', 'admin_status', 'status', 'negotiation', 'temperature')},
                                  'down': down(u.admin_status, u.status)} for u in uplinks]
