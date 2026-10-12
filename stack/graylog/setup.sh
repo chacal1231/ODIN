@@ -81,6 +81,12 @@ preflight() {
     pf POST /generate >/dev/null
     return 1
   fi
+  # A Data Node that registers after the CA was created got no certificate: ask again while one waits.
+  if jq -e 'any(.status == "UNCONFIGURED")' <<<"$nodes" >/dev/null; then
+    echo 'Data Node sin certificado: emitiéndolo.'
+    pf POST /generate >/dev/null
+    return 1
+  fi
   if jq -e 'length > 0 and all(.status == "CONNECTED")' <<<"$nodes" >/dev/null; then
     echo 'Data Node conectado: terminando la primera configuración.'
     pf POST /status/finish-config >/dev/null

@@ -25,8 +25,9 @@ services:
       GRAYLOG_DATANODE_PASSWORD_SECRET: ${GRAYLOG_PASSWORD_SECRET:?Ejecuta ./setup.sh}
       GRAYLOG_DATANODE_MONGODB_URI: mongodb://mongodb:27017/graylog
       GRAYLOG_DATANODE_OPENSEARCH_HEAP: ${DATANODE_HEAP:-4g}
+    # No memlock: the Data Node does not lock OpenSearch's memory, and a Proxmox LXC cannot raise that limit
+    # ("error setting rlimit type 8"), which kept the container from starting.
     ulimits:
-      memlock: {soft: -1, hard: -1}
       nofile: {soft: 65536, hard: 65536}
     volumes:
       - datanode_data:/var/lib/graylog-datanode
