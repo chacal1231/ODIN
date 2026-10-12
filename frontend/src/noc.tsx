@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useId, useRef, useState } from "react";
 import { Qr } from "./qr";
 
 type Api = (path: string, method?: string, body?: unknown) => Promise<any>;
@@ -27,6 +27,8 @@ const serviceStates: Record<string, string> = {
   failed: "No se pudo iniciar WhatsApp Web; reintentando",
   unreachable: "El servicio de WhatsApp no responde",
 };
+// Case- and accent-insensitive, for searching names like "Atención NOC" as "atencion noc".
+const fold = (s: string) => s.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
 const when = (s: number | null, zone: string) =>
   s ? new Date(s * 1000).toLocaleString("es", { timeZone: zone, dateStyle: "short", timeStyle: "short" }) : "—";
 const ago = (s: number) => {
@@ -157,6 +159,65 @@ export function CaseCommunication({ api, caseId, zone, onError }: { api: Api; ca
   );
 }
 
+type Group = { id: string; name: string; participants: number };
+
+/** One field to search the account's groups by name and pick one (a WhatsApp account can have hundreds). */
+function GroupPicker({ groups, value, onChange }: { groups: Group[]; value: string; onChange: (id: string) => void }) {
+  const id = useId(),
+    input = useRef<HTMLInputElement>(null),
+    [open, setOpen] = useState(false),
+    [query, setQuery] = useState(""),
+    [active, setActive] = useState(-1);
+  const selected = groups.find((g) => g.id === value);
+  const items = groups.filter((g) => fold(g.name).includes(fold(query.trim())));
+  function choose(g: Group) {
+    onChange(g.id);
+    setQuery("");
+    setOpen(false);
+    input.current?.focus();
+  }
+  return (
+    <div className="device-select"
+      onBlur={(e) => { if (!e.currentTarget.contains(e.relatedTarget as Node)) setOpen(false); }}>
+      <label htmlFor={id}>Grupo del NOC</label>
+      <div className="device-combobox">
+        <input id={id} ref={input} role="combobox" aria-expanded={open} aria-controls={id + "-options"}
+          aria-autocomplete="list" aria-activedescendant={open && items[active] ? id + "-option-" + active : undefined}
+          autoComplete="off" required={!selected} maxLength={100}
+          placeholder={open ? "Buscar grupo…" : `Elige uno de los ${groups.length} grupos de la cuenta`}
+          value={open ? query : selected ? selected.name : ""}
+          onClick={() => { if (!open) { setOpen(true); setQuery(""); setActive(-1); } }}
+          onChange={(e) => { setQuery(e.target.value); setOpen(true); setActive(0); }}
+          onKeyDown={(e) => {
+            if (e.key === "Escape") { e.preventDefault(); setOpen(false); }
+            if (e.key === "ArrowDown" || e.key === "ArrowUp") {
+              e.preventDefault(); setOpen(true);
+              setActive((a) => Math.max(0, Math.min(items.length - 1, a + (e.key === "ArrowDown" ? 1 : -1))));
+            }
+            if (e.key === "Enter" && open) { e.preventDefault(); if (items[active]) choose(items[active]); }
+          }} />
+        <button type="button" className="device-toggle" aria-label="Abrir la lista de grupos"
+          onClick={() => { setOpen((o) => !o); setQuery(""); setActive(-1); input.current?.focus(); }}>▾</button>
+        {open && (
+          <div className="device-dropdown">
+            <div role="listbox" id={id + "-options"} aria-label="Grupos de la cuenta">
+              {items.map((g, i) => (
+                <button type="button" role="option" tabIndex={-1} id={id + "-option-" + i} key={g.id}
+                  aria-selected={g.id === value} className={active === i ? "active" : ""}
+                  onMouseDown={(e) => e.preventDefault()} onClick={() => choose(g)}>
+                  <strong>{g.name}</strong>
+                  <small> · {g.participants} participantes</small>
+                </button>
+              ))}
+            </div>
+            {!items.length && <small role="status">Ningún grupo coincide.</small>}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
 function WhatsApp({ api, onError }: { api: Api; onError: (s: string) => void }) {
   const [data, setData] = useState<any>(null),
     [group, setGroup] = useState("");
@@ -200,17 +261,7 @@ function WhatsApp({ api, onError }: { api: Api; onError: (s: string) => void }) 
             });
           }}
         >
-          <label>
-            Grupo del NOC
-            <select required value={group} onChange={(e) => setGroup(e.target.value)}>
-              <option value="">Elige un grupo de la cuenta</option>
-              {data.groups.map((g: any) => (
-                <option key={g.id} value={g.id}>
-                  {g.name} · {g.participants} participantes
-                </option>
-              ))}
-            </select>
-          </label>
+          <GroupPicker groups={data.groups || []} value={group} onChange={setGroup} />
           <button disabled={busy || !group || group === data.group_id}>Usar este grupo</button>
         </form>
       )}
