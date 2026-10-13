@@ -128,7 +128,7 @@ def test_a_cut_on_most_of_one_pon_is_a_common_failure_and_alerts():
         expected = access_rules.one_in(access_rules.chance(20, 32, 1 / 98))
         assert case.severity == 'critical' and case in alerting(db)
         assert case.detail['reading']['title'] == ('Corte de fibra en el PON 0/1: 20 de 32 ONUs (zona Norte, splitters S1, S2) · 16 % de la OLT'
-                                                   f' · falla común: si cayeran por separado, {expected}')
+                                                   f' · falla común: si cayeran por separado, {expected} (frente al resto de la OLT)')
         assert expected.startswith('1 en 10') and case.detail['pons'][0]['chance'] < 1e-20
         # The NOC message: the situation in the title, the share and why it is common, and what to do.
         from odin.noc import messages
@@ -171,3 +171,54 @@ def test_the_noc_sets_how_unlikely_a_common_failure_must_be(client, administrato
     with session() as db:
         correlator.run(db, T + 120);db.commit()
         assert access(db).severity == 'warning'
+
+
+def test_each_pon_learns_its_normal_by_hour_and_an_outage_does_not_teach_it():
+    import datetime as dt
+    from zoneinfo import ZoneInfo
+    from odin.config import settings
+    from odin.models import PonSample
+    from odin.olts import baselines
+    zone = ZoneInfo(settings().timezone)
+    first = int(dt.datetime.combine(dt.date(2027, 3, 1), dt.time(0), zone).timestamp())
+    rows = []
+    for day in range(15):
+        for hour in range(24):
+            # Every evening 2 of 20 customers switch their ONU off; one morning the whole PON lost power.
+            power = 2 if hour == 21 else 20 if (day, hour) == (3, 10) else 0
+            rows.append(PonSample(olt_id='1', board='1', port='1', at=first + (day * 24 + hour) * 3600, onus=20, power=power))
+    found = baselines.compute(rows, first + 15 * 86400, zone)
+    assert found[('1', '1', 'power', 21)] == (0.1, 15) and found[('1', '1', 'power', 10)] == (0.0, 15)
+    assert found[('1', '1', 'los', 21)] == (0.0, 15)
+
+
+def test_the_same_outage_is_normal_in_the_evening_and_a_common_failure_in_the_morning():
+    def outage_of(affected):
+        return [{'board': '1', 'port': '1', 'cause': 'power', 'zone': 'Norte', 'affected': affected, 'subscribers': 20, 'started_at': T, 'odbs': []}]
+    evening, morning = {('1', '1', 'power'): (0.1, 15)}, {('1', '1', 'power'): (0.0, 15)}
+    assert access_rules.reading('OLT', False, [], outage_of(3), 100, normal=evening)[3] is False
+    code, title, _, critical = access_rules.reading('OLT', False, [], outage_of(3), 100, normal=morning)
+    assert critical and title.endswith('(frente a lo normal de ese PON a esta hora)')
+
+
+def test_history_is_used_from_enough_days_and_recomputed_daily():
+    from odin.models import PonBaseline, PonSample
+    from odin.olts import baselines
+    hour = baselines.hour_of(T + 60)
+    with session() as db:
+        o = olt(db);pons(db, o, [32, 32, 32, 32]);outage(db, o, 1, cause='power', affected=3)
+        db.add(PonBaseline(olt_id=o.id, board='0', port='1', cause='power', hour=hour, rate=0.0, days=baselines.MIN_DAYS - 1, computed_at=T))
+        db.commit()
+        # Not enough days: the rest of the OLT, where 3 of 32 is not unusual.
+        correlator.run(db, T + 60);db.commit()
+        assert access(db).severity == 'warning'
+        db.get(PonBaseline, (o.id, '0', '1', 'power', hour)).days = baselines.MIN_DAYS;db.commit()
+        correlator.run(db, T + 120);db.commit()
+        case = access(db)
+        assert case.severity == 'critical' and case.detail['pons'][0]['basis'] == 'history'
+        # Once a day, from the samples: the stored one is replaced.
+        db.add(PonSample(olt_id=o.id, board='0', port='1', at=T, onus=32, power=0));db.commit()
+        assert baselines.refresh(db, T + 3600) is False
+        assert baselines.refresh(db, T + 86400 + 1) is True;db.commit()
+        stored = {(b.hour, b.days) for b in db.scalars(select(PonBaseline))}
+        assert (baselines.hour_of(T), 1) in stored and {days for _, days in stored} == {1}

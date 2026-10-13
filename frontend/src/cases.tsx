@@ -265,9 +265,11 @@ function Calibration({ api, admin }: { api: Api; admin: boolean }) {
         Avisa: tránsito, transporte o enlace interno desde la primera caída; otras caídas solo si se sostienen {t.sustained_minutes} min o suman {t.flap_critical} caídas;
         latencia de red propia crítica; servicios externos solo cuando {t.external_together} o más se degradan a la vez.</p>
       <p>Acceso: avisa la OLT inalcanzable, un uplink caído, un corte de fibra en varios PON a la vez y la caída de un PON que sea una
-        <strong> falla común</strong>: que tantas ONUs del PON estén caídas con la misma causa sería, si cayeran cada una por su cuenta al ritmo del resto
-        de la OLT, menos probable que {significances.find(([v]) => v === t.access_significance)?.[1].split(" (")[0] || `1 en ${Math.round(1 / t.access_significance)}`}.
-        No hay un número fijo de clientes: 4 de 4 ONUs de un PON es falla común; 4 de 200 repartidas, no.</p>
+        <strong> falla común</strong>: que tantas ONUs del PON estén caídas con la misma causa sería, si cayeran cada una por su cuenta a su ritmo
+        normal, menos probable que {significances.find(([v]) => v === t.access_significance)?.[1].split(" (")[0] || `1 en ${Math.round(1 / t.access_significance)}`}.
+        No hay un número fijo de clientes: 4 de 4 ONUs de un PON es falla común; 4 de 200 repartidas, no.
+        {" "}Lo normal de cada PON se aprende de su historial por hora del día: {t.access_history.pons} de {t.access_history.total} PON
+        {" "}ya lo usan ({t.access_history.days} de {t.access_history.min_days} días necesarios); mientras tanto se compara con el resto de la OLT.</p>
       {admin && <label>Exigencia para la falla común
         <select value={t.access_significance} onChange={(e) => void setSignificance(Number(e.target.value))}>
           {significances.map(([v, label]) => <option key={v} value={v}>{label}</option>)}

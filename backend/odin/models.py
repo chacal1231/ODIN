@@ -852,6 +852,20 @@ class PonSample(Base):
     offline = Column(Integer, nullable=False, default=0)
 
 
+class PonBaseline(Base):
+    """What is normal for a PON: the share of its ONUs down with a cause at an hour of the day (local), learned from
+    PonSample as the median over days (olts/baselines.py)."""
+    __tablename__ = 'pon_baselines'
+    olt_id = Column(String(40), primary_key=True)
+    board = Column(String(10), primary_key=True)
+    port = Column(String(10), primary_key=True)
+    cause = Column(String(20), primary_key=True)
+    hour = Column(Integer, primary_key=True)
+    rate = Column(Float, nullable=False)  # median share of the PON's ONUs down
+    days = Column(Integer, nullable=False)  # days with enough samples of that hour
+    computed_at = Column(BigInteger, nullable=False)
+
+
 class OltOutage(Base):
     """A PON outage as SmartOLT groups it for the NOC: cause, subscribers and splitters, from start to end."""
     __tablename__ = 'olt_outages'

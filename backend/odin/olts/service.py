@@ -1,7 +1,7 @@
 """SmartOLT reader on the job queue: outages every 5 minutes, OLT inventory every hour, ONUs once a day.
 
 Each outage read also keeps, per PON, how many ONUs are down by cause (PonSample): a row when it changes and one an
-hour otherwise, for 90 days, so a PON's normal can be learned by time of day.
+hour otherwise, for 90 days, from which each PON's normal by time of day is learned once a day (baselines.py).
 
 Each read runs as one job of the worker. Network reads happen with no database transaction open; the result is
 written afterwards in one transaction. Due times carry a random delay, as SmartOLT asks, and a 429 stops every read
@@ -23,6 +23,7 @@ from ..models import (Device, Integration, InventoryInterface, Job, Olt, OltOuta
 from ..security import decrypt
 from ..inventory.connectors import ConnectorError
 from .connector import SmartOLT, RateLimited
+from . import baselines
 
 INTERVALS = {'outages': 300, 'inventory': 3600, 'onus': 86400}
 # Inventory first: outages are read per OLT, so they need the OLT list (an account without OLTs costs no outage calls).
@@ -212,6 +213,7 @@ def write_outages(db, data, stamp_, zone):
             if ident not in current:row.active, row.ended_at = False, stamp_
         sample_pons(db, key, stamp_)
     db.execute(delete(PonSample).where(PonSample.at < stamp_ - SAMPLE_RETENTION))
+    baselines.refresh(db, stamp_)
 
 
 def sample_pons(db, olt_id, stamp_):

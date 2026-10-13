@@ -11,15 +11,17 @@ ODIN's reading, deterministic and never a confirmed cause, in this order:
 - power: the customers' ONUs lost power (dying gasp): an electrical outage in the zone, not the network;
 - offline: ONUs offline without a cause SmartOLT can tell.
 Critical when the OLT is unreachable, an uplink is down, LOS hits several PONs together, or a PON outage is a common
-failure rather than scattered customers: with each ONU failing on its own at the rate seen now in the rest of the OLT
-(smoothed, so one ONU is never proof), k or more of the PON's n down with that cause is less likely than the
-significance the NOC sets in the calibration (1 in 10,000 by default). No count of customers is fixed: 4 of 4 ONUs on
+failure rather than scattered customers: with each ONU failing on its own at its normal rate, k or more of the PON's
+n down with that cause is less likely than the significance the NOC sets in the calibration (1 in 10,000 by default).
+The normal rate is the PON's own at this hour of the day once its history has enough days (olts/baselines.py), and
+until then the rate seen now in the rest of the OLT; both are smoothed, so one ONU is never proof. No count of customers is fixed: 4 of 4 ONUs on
 a PON is a common failure, 4 of 200 scattered is not, in a small ISP or a large one. The share of the OLT is shown.
 Outages SmartOLT lists as down over 7 days (stale) are known and stay out.
 """
 import math
 from sqlalchemy import select, func
 from ..models import Case, CaseEvidence, CorrelationState, Olt, OltOutage, OltPonPort, OltUplink, Pop
+from ..olts.baselines import normal
 
 ACCESS = 'access'
 SIGNIFICANCE = 0.0001   # default of CorrelationState.access_significance
@@ -60,20 +62,31 @@ def one_in(probability):
     return '1 en ' + ('10' + str(exponent).translate(str.maketrans('0123456789', '⁰¹²³⁴⁵⁶⁷⁸⁹')) if exponent >= 4 else f'{round(1 / probability):,}'.replace(',', '.'))
 
 
-def commonness(pons, registered):
-    """Each PON outage with `chance`: how likely its affected ONUs are by chance, given the rest of the OLT now."""
+def commonness(pons, registered, normal=None):
+    """Each PON outage with `chance`: how likely its affected ONUs are by chance, and the `basis` of that normal.
+
+    `normal` ({(board, port, cause): (rate, days)}, olts/baselines.normal): the PON's own history at this hour,
+    weighted by how much of it there is; without it, the rest of the OLT now."""
     for p in pons:
-        rest_down = sum(o['affected'] for o in pons if o['cause'] == p['cause'] and o is not p)
-        rest = max(0, registered - p['subscribers'])
-        p['chance'] = chance(p['affected'], max(p['subscribers'], p['affected']), (rest_down + 1) / (rest + 2))
+        n = max(p['subscribers'], p['affected'])
+        found = (normal or {}).get((p['board'], p['port'], p['cause']))
+        if found:
+            rate, days = found
+            seen = n * days
+            p['basis'], rate = 'history', (rate * seen + 1) / (seen + 2)
+        else:
+            rest_down = sum(o['affected'] for o in pons if o['cause'] == p['cause'] and o is not p)
+            rest = max(0, registered - p['subscribers'])
+            p['basis'], rate = 'olt', (rest_down + 1) / (rest + 2)
+        p['chance'] = chance(p['affected'], n, rate)
     return pons
 
 
-def reading(name, unreachable, uplinks, pons, registered=0, significance=SIGNIFICANCE):
+def reading(name, unreachable, uplinks, pons, registered=0, significance=SIGNIFICANCE, normal=None):
     """(code, title, action, critical) for level 1; the code names the situation of its guide (noc/guides.py).
 
-    `registered`: ONUs of the whole OLT, the rest of it being the normal a PON is compared with."""
-    commonness(pons, registered)
+    `registered`: ONUs of the whole OLT; `normal`: what is normal for its PONs at this hour (see commonness)."""
+    commonness(pons, registered, normal)
     for p in pons:p['common'] = p['chance'] < significance
     common = lambda group: [p for p in group if p['common']]
     los = [p for p in pons if p['cause'] == 'los']
@@ -86,7 +99,8 @@ def reading(name, unreachable, uplinks, pons, registered=0, significance=SIGNIFI
         found = common(group)
         if not found:return share
         worst = min(found, key=lambda p: p['chance'])
-        return share + f' · falla común: si cayeran por separado, {one_in(worst["chance"])}'
+        basis = 'frente a lo normal de ese PON a esta hora' if worst['basis'] == 'history' else 'frente al resto de la OLT'
+        return share + f' · falla común: si cayeran por separado, {one_in(worst["chance"])} ({basis})'
     if unreachable:
         total = ' y tiene PON caídos: posible caída total de la OLT' if pons else ''
         return ('unreachable', f'SmartOLT no llega a la OLT {name}{total}',
@@ -165,7 +179,8 @@ def ingest(db, touched, stamp):
                   'uplinks_down': down_links, 'pons': pons, 'affected': sum(p['affected'] for p in pons),
                   'subscribers': sum(p['subscribers'] for p in pons), 'zones': sorted({p['zone'] for p in pons if p['zone']})}
         if problem:
-            code, title, action, critical = reading(olt.name, unreachable, down_links, pons, int(registered.get(olt.id) or 0), significance)
+            code, title, action, critical = reading(olt.name, unreachable, down_links, pons, int(registered.get(olt.id) or 0), significance,
+                                                    normal(db, olt.id, stamp))
             # The PON the reading is about, for the NOC message (noc/messages.py) even after the outage ends.
             main = min((p for p in pons if code in ('fiber', 'power', 'offline') and (code == 'offline' or p['cause'] == {'fiber': 'los'}.get(code, code))),
                        key=lambda p: (not p['common'], p['chance'], -p['affected']), default=None)

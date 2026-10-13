@@ -66,6 +66,16 @@ def summary(db):
             'unacknowledged': sum(c.acknowledged_at is None for c in rows)}
 
 
+def access_history(db):
+    """How far each PON's own normal is learned: PONs with enough days at some hour, of those with ONUs."""
+    from ..models import OltPonPort, PonBaseline
+    from ..olts.baselines import MIN_DAYS
+    learned = db.scalar(select(func.count()).select_from(select(PonBaseline.olt_id, PonBaseline.board, PonBaseline.port)
+                                                          .where(PonBaseline.days >= MIN_DAYS).distinct().subquery()))
+    return {'pons': learned or 0, 'total': db.scalar(select(func.count()).select_from(OltPonPort).where(OltPonPort.onus > 0)) or 0,
+            'days': db.scalar(select(func.max(PonBaseline.days))) or 0, 'min_days': MIN_DAYS}
+
+
 def calibration(db, zone='America/Bogota'):
     """Cases opened per day over the last DAYS days, by whether and why they would alert; NOC reviews; thresholds in use."""
     from zoneinfo import ZoneInfo
@@ -89,4 +99,5 @@ def calibration(db, zone='America/Bogota'):
             'thresholds': {'quiet_close_minutes': correlator.QUIET // 60, 'stale_hours': correlator.STALE // 3600,
                            'sustained_minutes': correlator.SUSTAINED // 60, 'flap_critical': correlator.FLAP_CRITICAL,
                            'external_together': EXTERNAL_TOGETHER,
-                           'access_significance': (db.get(CorrelationState, 'cases') or CorrelationState()).access_significance or access.SIGNIFICANCE}}
+                           'access_significance': (db.get(CorrelationState, 'cases') or CorrelationState()).access_significance or access.SIGNIFICANCE,
+                           'access_history': access_history(db)}}
