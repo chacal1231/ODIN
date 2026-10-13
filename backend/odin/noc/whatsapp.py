@@ -105,7 +105,7 @@ def providers(db, service, st):
         info = messages.carrier(case)
         thread = db.get(WhatsAppMessage, case.id)
         if not info or case.id in known or not thread:continue
-        service.send(st.group_id, messages.whatsapp(messages.provider(case, info, FOLLOW_UP)), thread.message_id)
+        service.send(st.group_id, messages.whatsapp(messages.provider_note(case, info, FOLLOW_UP)), thread.message_id)
         db.add(WhatsAppProviderMessage(case_id=case.id, group_id=st.group_id, message_id=thread.message_id, recovered=False, closed=False,
                                        notified_at=stamp))
         db.commit()

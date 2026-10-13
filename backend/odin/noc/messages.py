@@ -68,15 +68,24 @@ def carrier(case):
     return info if info.get('role') in CARRIER_ROLES else None
 
 
-def provider(case, info, follow_up):
-    """A carrier incident for the providers group; `follow_up` says where the carrier's ticket and news go."""
+def provider_name(info):
     # Transports are named by their whole description: the provider is not always its second word (roles.py).
     name = info.get('description') if info.get('role') == 'transport' else (info.get('provider') or info.get('description'))
-    fields = [('Proveedor', f'{name or "sin identificar"} ({info.get("label") or info.get("role")})'),
+    return f'{name or "sin identificar"} ({info.get("label") or info.get("role")})'
+
+
+def provider(case, info, follow_up):
+    """A carrier incident for the providers group; `follow_up` says where the carrier's ticket and news go."""
+    fields = [('Proveedor', provider_name(info)),
               ('Estado', f'activo desde {local(case.opened_at)} · {case.drops} caída(s)')]
     fields.append(('Enlace', info['summary']) if info.get('summary') else ('Puerto', f'«{info.get("description")}»'))
     fields.append(('Seguimiento', follow_up))
     return Message('CRÍTICO' if case.severity == 'critical' else 'ADVERTENCIA', title(case), fields, link=ref(case))
+
+
+def provider_note(case, info, follow_up):
+    """The carrier's part in the thread of a case already announced: no link or reading, the case message has them."""
+    return Message('PROVEEDOR', title(case), [('Proveedor', provider_name(info)), ('Caídas', str(case.drops)), ('Seguimiento', follow_up)])
 
 
 def provider_closed(case):

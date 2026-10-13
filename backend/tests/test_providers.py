@@ -206,7 +206,8 @@ def test_carrier_incidents_go_to_the_case_thread_of_the_whatsapp_group():
     assert len(alerts) == 2 and all(a[1].startswith('*[CRÍTICO]* Sesión BGP · 198.51.100.134 · PE-A') for a in alerts)
     with session() as db:
         assert details[0] == '123@g.us' and details[2] == db.get(WhatsAppMessage, case_id).message_id
-    assert '*Proveedor:* CARRIER (tránsito)' in details[1] and '*Seguimiento:* registrar el ticket del proveedor' in details[1]
+    assert details[1] == ('*[PROVEEDOR]* Sesión BGP · 198.51.100.134 · PE-A\n*Proveedor:* CARRIER (tránsito)\n*Caídas:* 1\n'
+                          '*Seguimiento:* registrar el ticket del proveedor y sus novedades como nota del caso en ODIN')
     count = len(service.sent)
     with session() as db:
         row = db.get(Case, case_id);row.last_state, row.last_state_at = 'up', stamp + 300;db.commit()
