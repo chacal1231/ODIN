@@ -7,7 +7,7 @@ type Links = { onOpenCase: (id: string) => void; onOpenIncident: (id: string) =>
 
 const periods: [string, string, number][] = [["1h", "Última hora", 3600], ["6h", "Últimas 6 horas", 21600], ["24h", "Últimas 24 horas", 86400], ["7d", "Últimos 7 días", 604800]];
 const stages: Record<string, string> = {
-  queued: "En cola", gathering: "Consultando casos, alertas y fuentes", reading: "Leyendo el contexto", writing: "Preparando la respuesta",
+  queued: "En cola", planning: "Entendiendo la pregunta", gathering: "Consultando la red", reading: "Leyendo el contexto", writing: "Preparando la respuesta",
   validating: "Comprobando referencias", delayed: "El modelo no responde; se reintentará",
 };
 const errors: Record<string, string> = {
@@ -129,6 +129,8 @@ function Answer({ message, run, links }: { message: any; run: any; links: Links 
     else if (ref.kind === "evidence" || ref.kind === "note") { if (run.request?.case_id) links.onOpenCase(run.request.case_id); }
     else if (ref.kind === "events" || ref.kind === "logs") links.onGo("Eventos");
     else if (ref.kind === "knowledge") links.onGo("Casos");
+    else if (ref.kind === "probe") links.onGo("Servicios externos");
+    else if (ref.kind === "smartolt") links.onGo("OLTs");
   };
   // Labels become buttons to the cited data; lines starting with "- " become a list.
   const inline = (line: string) => line.split(/(\[[A-Z][0-9]{1,3}(?:, *[A-Z][0-9]{1,3})*\]|\*\*[^*]+\*\*)/).map((part, i) => {

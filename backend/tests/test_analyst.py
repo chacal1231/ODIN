@@ -23,9 +23,15 @@ def answer(refs=('E1',), summary='Resumen'):
 
 
 class FakeLlm:
-    """Stands in for llama-server: counts characters as tokens and replays scripted answers."""
+    """Stands in for llama-server: counts characters as tokens and replays scripted answers.
+
+    Planning calls (the planner's schema) are answered from `plans`, the general plan when it is empty, and kept in
+    `plan_calls`, so `answers` and `calls` stay the answering calls.
+    """
     answers = []
     calls = []
+    plans = []
+    plan_calls = []
 
     def __init__(self, endpoint, secret, networks, heartbeat=lambda: None):
         self.heartbeat = heartbeat
@@ -37,6 +43,12 @@ class FakeLlm:
         return sum(len(m['content']) for m in messages) // 4
 
     def chat(self, messages, schema, max_tokens, progress=lambda *a: None, temperature=0.2):
+        from odin.analyst import planner
+        if schema is planner.SCHEMA:
+            FakeLlm.plan_calls.append(messages)
+            item = FakeLlm.plans.pop(0) if FakeLlm.plans else json.dumps(planner.GENERAL)
+            if isinstance(item, Exception):raise item
+            return item, {}, {}
         FakeLlm.calls.append(messages)
         progress('reading', 10, 10)
         item = FakeLlm.answers.pop(0)
@@ -46,7 +58,7 @@ class FakeLlm:
 
 @pytest.fixture
 def llm(monkeypatch):
-    FakeLlm.answers, FakeLlm.calls = [], []
+    FakeLlm.answers, FakeLlm.calls, FakeLlm.plans, FakeLlm.plan_calls = [], [], [], []
     monkeypatch.setattr(service, 'Llm', FakeLlm)
     with session() as db:
         db.add(Integration(kind='llama_server', endpoint='http://172.18.0.1:8081', encrypted_secret=encrypt('k'),

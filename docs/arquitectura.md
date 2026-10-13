@@ -32,6 +32,7 @@ tracer ──► trazas, cambios de ruta, nombres de redes ──────┘
 - El **correlador** convierte cambios de estado en casos con evidencia explicada. Cada minuto les agrega la lectura de acceso, el veredicto de servicios externos y el impacto en clientes ([Casos y veredictos](casos-y-veredictos.md)).
 - El **detector** evalúa cada ronda contra la configuración de su serie y los umbrales adaptativos aplicados ([Organización del monitoreo](organizacion-monitoreo.md)).
 - El **analista** lee un paquete de evidencia del caso y responde citándola.
+- En el **chat**, una llamada corta al modelo primero decide de qué trata la pregunta (latencia, acceso, enrutamiento, alertas, logs o general) y qué servicios, equipos u OLTs nombra, a partir de un índice de la red. ODIN arma el contexto con sus propias consultas según ese plan (mediciones de latencia por categoría y destino, estado de las OLTs, casos, alertas y logs relacionados) y el modelo responde citándolo. Si el plan falla, se usa el contexto general.
 - El proceso de **mensajería** publica lo que avisa y los informes del N1, y genera las entregas de turno ([Comunicación del NOC](comunicacion-noc.md)).
 
 ## Recursos y endurecimiento

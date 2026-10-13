@@ -86,14 +86,34 @@ def state(db):
     return row
 
 
-def build(db, row):
-    """(pack, messages_for(pack_text), schema, parse(content, refs)) for one run."""
+def build(db, row, plan=None):
+    """(pack, messages_for(pack_text), schema, parse(content, refs)) for one run; `plan` is the chat question's (planner.py)."""
     if row.kind == 'case':
         from .packs import case_pack
         case = db.get(Case, row.case_id)
         return case_pack(db, case), prompts.messages, prompts.SCHEMA, prompts.parse
     from .chat import chat_pack, parse
-    return (*chat_pack(db, row), parse)
+    return (*chat_pack(db, row, plan), parse)
+
+
+def gather(job_id, token, analysis_id, plan):
+    """Build the pack of a chat question once its plan is known; None when the run is no longer this worker's."""
+    with session() as db:
+        job = db.scalar(select(Job).where(Job.id == job_id).with_for_update())
+        if not job or job.lease_token != token:return None
+        row = db.get(Analysis, analysis_id)
+        if not row:
+            job.status = 'done';job.lease_token = None;job.lease_until = None;db.commit();return None
+        row.stage = 'gathering'
+        try:
+            built = build(db, row, plan)
+        except Exception:
+            logging.exception('analysis_pack_failed')
+            row.status = 'failed';row.error = 'pack_failed';row.finished_at = now()
+            job.status = 'done';job.lease_token = None;job.lease_until = None;db.commit();return None
+        request_info = (row.pack or {}).get('request')
+        db.commit()
+        return built, request_info
 
 
 def save(analysis_id, **values):
@@ -123,14 +143,25 @@ def execute(job_id, token):
                                                        integration.allowed_networks, integration.model)
         row.status = 'running';row.stage = 'gathering';row.started_at = row.started_at or now();row.error = None
         analysis_id, created_at, kind = row.id, row.created_at, row.kind
-        try:
-            pack, messages_for, schema, parse = build(db, row)
-        except Exception:
-            logging.exception('analysis_pack_failed')
-            row.status = 'failed';row.error = 'pack_failed';row.finished_at = now()
-            job.status = 'done';job.lease_token = None;job.lease_until = None;db.commit();return
-        # Building a chat pack may settle its period on the one of the context it reuses.
-        request_info = (row.pack or {}).get('request')
+        planning = None
+        if kind == 'chat':
+            from .chat import planning as chat_planning
+            try:
+                planning = chat_planning(db, row)
+            except Exception:
+                logging.exception('chat_planning_failed')
+        if planning:
+            # The pack waits for the plan: no transaction stays open while the model plans.
+            row.stage = 'planning'
+        else:
+            try:
+                pack, messages_for, schema, parse = build(db, row)
+            except Exception:
+                logging.exception('analysis_pack_failed')
+                row.status = 'failed';row.error = 'pack_failed';row.finished_at = now()
+                job.status = 'done';job.lease_token = None;job.lease_until = None;db.commit();return
+            # Building a chat pack may settle its period on the one of the context it reuses.
+            request_info = (row.pack or {}).get('request')
         db.commit()
     last_write = [0.0]
 
@@ -148,6 +179,11 @@ def execute(job_id, token):
 
     started = time.monotonic();error = None;result = None;usage = {};props = {}
     client = ApiLlm(endpoint, secret, model, renew) if provider == 'deepseek' else Llm(endpoint, secret, networks, renew)
+    if planning:
+        from .planner import plan
+        gathered = gather(job_id, token, analysis_id, plan(client, *planning))
+        if not gathered:return
+        (pack, messages_for, schema, parse), request_info = gathered
     try:
         props = client.props()
         count = lambda text: client.count(messages_for(text))
