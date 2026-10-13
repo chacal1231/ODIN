@@ -21,7 +21,8 @@ def access_case(db, opened, code='fiber', state='down', **detail):
     row = Case(kind='access', key=uid(), entity_key='olt:1', entity_label='POP Centro', subject='OLT-NORTE', opened_at=opened,
                last_activity_at=opened, last_state=state, last_state_at=opened, state='active', severity='warning', rule_version=4,
                detail={'scope': 'access', 'olt_id': '1', 'zones': ['Norte'],
-                       'reading': {'code': code, 'title': 'Corte de fibra en el PON 0/1: 20 de 32 ONUs (zona Norte)'},
+                       'reading': {'code': code, 'title': 'Corte de fibra en el PON 0/1: 20 de 32 ONUs (zona Norte)',
+                                   'action': 'Informar corte de fibra en Norte. N2 despacha a campo.'},
                        'impact': {'kind': 'confirmed', 'onus': 20, 'text': 'Confirmado: 20 ONUs afectadas'}, **detail})
     db.add(row);db.flush();return row
 
@@ -81,8 +82,9 @@ def test_whatsapp_posts_case_threads_reports_and_shifts():
     service = Service()
     whatsapp.cycle(service)
     alert = service.sent[0][1]
-    assert alert.startswith('*[CRÍTICO]* Caída de acceso · OLT-NORTE · POP Centro\n*Estado:* activo desde')
-    assert '*Afectación:* Confirmado: 20 ONUs afectadas' in alert and 'Ref.: http' in alert
+    assert alert.startswith('*[CRÍTICO]* Corte de fibra · OLT-NORTE · POP Centro\n*Desde:* ')
+    assert '*Afectación:* Confirmado: 20 ONUs afectadas' in alert and '*Acción:* informar corte de fibra en Norte; N2 despacha a campo' in alert
+    assert 'Ref.: http' in alert
     with session() as db:
         case = db.get(Case, db.scalar(select(Case.id)))
         reports.create(db, case, 'inicial', 'Corte de fibra en Norte.', db.get(User, n1.id))
@@ -93,8 +95,8 @@ def test_whatsapp_posts_case_threads_reports_and_shifts():
         db.commit()
     whatsapp.cycle(service)
     texts = {text.split('\n')[0]: quoted for _, text, quoted in service.sent[1:]}
-    assert texts['*[DIAGNÓSTICO ODIN]* Caída de acceso · OLT-NORTE · POP Centro'] == 'msg1'
-    assert texts['*[INFORME N1]* Caída de acceso · OLT-NORTE · POP Centro'] == 'msg1'
+    assert texts['*[DIAGNÓSTICO ODIN]* Corte de fibra · OLT-NORTE · POP Centro'] == 'msg1'
+    assert texts['*[INFORME N1]* Corte de fibra · OLT-NORTE · POP Centro'] == 'msg1'
     assert any(t.startswith('*[ENTREGA DE TURNO]*') for t in texts)
     with session() as db:
         assert db.scalar(select(CaseReport)).deliveries['whatsapp']['status'] == 'sent'
@@ -117,7 +119,7 @@ def test_telegram_delivers_reports_in_the_case_thread():
         reports.create(db, case, 'inicial', 'Corte de fibra en Norte.', db.get(User, n1.id));db.commit()
         telegram.deliver(db, bot, st)
     alert, report = bot.sent()
-    assert alert['text'].startswith('<b>[CRÍTICO]</b> Caída de acceso · OLT-NORTE')
+    assert alert['text'].startswith('<b>[CRÍTICO]</b> Corte de fibra · OLT-NORTE')
     assert report['text'].startswith('<b>[INFORME N1]</b>') and report['reply_parameters']['message_id'] == 101
 
 
@@ -131,7 +133,7 @@ def test_shift_boundaries_handover_and_unwatched_hours():
         assert [r.kind for r in made] == ['cierre']  # the night before is older than an hour
         assert reports.tick(db, at(12, '20:30')) == []
         text = db.scalar(select(ShiftReport.text))
-        assert text.startswith('Casos abiertos al cierre: 1\n- [ADVERTENCIA] Caída de acceso · OLT-NORTE · POP Centro — desde 12/10 14:10')
+        assert text.startswith('Casos abiertos al cierre: 1\n- [ADVERTENCIA] Corte de fibra · OLT-NORTE · POP Centro — desde 12/10 14:10')
         assert 'sin informar' in text and 'Informes N1: 0; 1 caso(s) informados fuera de plazo o sin informar' in text
         made = reports.tick(db, at(13, '06:10'))
         assert [(r.kind, r.starts_at, r.ends_at) for r in made] == [('apertura', at(12, '20:00'), at(13, '06:00'))]

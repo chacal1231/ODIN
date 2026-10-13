@@ -31,8 +31,54 @@ def kind(case):
     return 'Servicio externo' if case.kind == 'latency' and case.detail.get('scope') == 'external' else KINDS.get(case.kind, case.kind)
 
 
+# What an access case is, by its reading (cases/access.py): the title says the situation, not «Caída de acceso».
+ACCESS = {'fiber': 'Corte de fibra', 'fiber_common': 'Corte de fibra común', 'power': 'Falla de energía', 'offline': 'ONUs sin conexión',
+          'unreachable': 'OLT inalcanzable', 'uplink': 'Uplink caído'}
+
+
 def title(case):
+    if case.kind == 'access':
+        r = case.detail.get('reading') or {}
+        place = f' · PON {r["pon"]}' if r.get('pon') else ''
+        pop = f' · {case.entity_label}' if case.entity_label and case.entity_label not in ('OLT', case.subject) else ''
+        return f'{ACCESS.get(r.get("code"), kind(case))} · {case.subject}{place}{pop}'
     return f'{kind(case)} · {case.subject}' + (f' · {case.entity_label}' if case.entity_label and case.entity_label != case.subject else '')
+
+
+def access_impact(case):
+    """«16 de 20 ONUs del PON (14 % de la OLT) · Zona - El Centro · falla común, no son clientes sueltos»."""
+    from ..cases.access import zone_text
+    d = case.detail
+    r = d.get('reading') or {}
+    pons = d.get('pons') or []
+    cause = {'fiber': 'los', 'fiber_common': 'los', 'power': 'power'}.get(r.get('code'))
+    group = [p for p in pons if not cause or p['cause'] == cause]
+    if not group:return (d.get('impact') or {}).get('text')
+    affected = sum(p['affected'] for p in group)
+    share = f' ({affected / d["registered"]:.0%} de la OLT)'.replace('%', ' %') if d.get('registered') else ''
+    if len(group) == 1:
+        p = group[0]
+        text = f'{p["affected"]} de {p["subscribers"]} ONUs del PON{share} · {zone_text(p["zone"])}'
+    else:
+        names = sorted({zone_text(p['zone']) for p in group if p['zone']})
+        text = f'{affected} ONUs en {len(group)} PON{share} · {", ".join(names) or "zona sin nombre"}'
+    if any(p.get('common') for p in group) and r.get('code') in ('fiber', 'power', 'offline'):
+        text += ' · falla común, no son clientes sueltos'
+    return text
+
+
+def action_text(action):
+    """«Informar X. N2 despacha.» as one field: «informar X; N2 despacha» (acronyms such as N2 or OLT keep their case)."""
+    lower = lambda t: t[:1].lower() + t[1:] if t[1:2].islower() else t
+    return '; '.join(lower(part.strip()) for part in action.rstrip('.').split('. ') if part.strip())
+
+
+def access_alert(case):
+    r = case.detail.get('reading') or {}
+    fields = [('Desde', local(case.opened_at))]
+    if access_impact(case):fields.append(('Afectación', access_impact(case)))
+    if r.get('action'):fields.append(('Acción', action_text(r['action'])))
+    return Message('CRÍTICO' if case.severity == 'critical' else 'ADVERTENCIA', title(case), fields, link=ref(case))
 
 
 def ref(case):
@@ -47,6 +93,7 @@ def reading(case):
 
 
 def case_alert(case, isolation=None):
+    if case.kind == 'access':return access_alert(case)
     fields = [('Estado', f'activo desde {local(case.opened_at)}')]
     if reading(case):fields.append(('Lectura', reading(case)))
     if (case.detail.get('impact') or {}).get('text'):fields.append(('Afectación', case.detail['impact']['text']))

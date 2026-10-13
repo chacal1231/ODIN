@@ -69,7 +69,7 @@ def test_power_outage_is_not_the_network():
         correlator.run(db, T + 60);db.commit()
         reading = access(db).detail['reading']
         assert reading == {'code': 'power', 'title': 'Falla de energía en la zona: 12 ONUs sin energía (Norte)',
-                           'action': 'Informar falla eléctrica en Norte: no es la red. No requiere despacho.'}
+                           'action': 'Informar falla eléctrica en Norte: no es la red. No requiere despacho.', 'pon': '0/1'}
 
 
 def test_unreachable_olt_uplink_recovery_and_close():
@@ -130,6 +130,11 @@ def test_a_cut_on_most_of_one_pon_is_a_common_failure_and_alerts():
         assert case.detail['reading']['title'] == ('Corte de fibra en el PON 0/1: 20 de 32 ONUs (zona Norte, splitters S1, S2) · 16 % de la OLT'
                                                    f' · falla común: si cayeran por separado, {expected}')
         assert expected.startswith('1 en 10') and case.detail['pons'][0]['chance'] < 1e-20
+        # The NOC message: the situation in the title, the share and why it is common, and what to do.
+        from odin.noc import messages
+        assert messages.whatsapp(messages.case_alert(case)).split('\n')[::3] == ['*[CRÍTICO]* Corte de fibra · OLT-NORTE · PON 0/1',
+            '*Acción:* informar corte de fibra en Norte; N2 despacha a campo']
+        assert '*Afectación:* 20 de 32 ONUs del PON (16 % de la OLT) · zona Norte · falla común, no son clientes sueltos' in messages.whatsapp(messages.case_alert(case))
 
 
 def test_scattered_customers_are_not_a_common_failure():

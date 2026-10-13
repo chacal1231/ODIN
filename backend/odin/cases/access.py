@@ -37,6 +37,12 @@ def zones(pons):
     return ', '.join(sorted({p['zone'] for p in pons if p['zone']})) or 'sin zona'
 
 
+def zone_text(zone):
+    # SmartOLT zones are often named «Zona - El Centro» already.
+    if not zone:return 'zona sin nombre'
+    return zone if zone.casefold().startswith('zona') else f'zona {zone}'
+
+
 def pon_text(p):
     return f'PON {p["board"]}/{p["port"]}'
 
@@ -68,7 +74,8 @@ def reading(name, unreachable, uplinks, pons, registered=0, significance=SIGNIFI
 
     `registered`: ONUs of the whole OLT, the rest of it being the normal a PON is compared with."""
     commonness(pons, registered)
-    common = lambda group: [p for p in group if p['chance'] < significance]
+    for p in pons:p['common'] = p['chance'] < significance
+    common = lambda group: [p for p in group if p['common']]
     los = [p for p in pons if p['cause'] == 'los']
     starts = sorted(p['started_at'] for p in los if p['started_at'])
     together = len(los) >= 2 and (not starts or starts[-1] - starts[0] <= TOGETHER)
@@ -93,7 +100,7 @@ def reading(name, unreachable, uplinks, pons, registered=0, significance=SIGNIFI
     if los:
         p = min(los, key=lambda x: (x['chance'], -x['affected']))
         splitters = f', splitters {", ".join(p["odbs"][:5])}' if p['odbs'] else ''
-        return ('fiber', f'Corte de fibra en el {pon_text(p)}: {p["affected"]} de {p["subscribers"]} ONUs (zona {p["zone"] or "sin zona"}{splitters})'
+        return ('fiber', f'Corte de fibra en el {pon_text(p)}: {p["affected"]} de {p["subscribers"]} ONUs ({zone_text(p["zone"])}{splitters})'
                 + (f'; {len(los) - 1} PON más con LOS en otros momentos' if len(los) > 1 else '') + why(los),
                 f'Informar corte de fibra en {zones(los)}. N2 despacha a campo.', bool(common(los)))
     power = [p for p in pons if p['cause'] == 'power']
@@ -159,7 +166,11 @@ def ingest(db, touched, stamp):
                   'subscribers': sum(p['subscribers'] for p in pons), 'zones': sorted({p['zone'] for p in pons if p['zone']})}
         if problem:
             code, title, action, critical = reading(olt.name, unreachable, down_links, pons, int(registered.get(olt.id) or 0), significance)
-            detail['reading'] = {'code': code, 'title': title, 'action': action}
+            # The PON the reading is about, for the NOC message (noc/messages.py) even after the outage ends.
+            main = min((p for p in pons if code in ('fiber', 'power', 'offline') and (code == 'offline' or p['cause'] == {'fiber': 'los'}.get(code, code))),
+                       key=lambda p: (not p['common'], p['chance'], -p['affected']), default=None)
+            detail['reading'] = {'code': code, 'title': title, 'action': action, 'pon': f'{main["board"]}/{main["port"]}' if main else None}
+            detail['registered'] = int(registered.get(olt.id) or 0)
             case.severity = 'critical' if critical else 'warning'
             if case.last_state != 'down':case.last_state, case.last_state_at, case.resolved_at = 'down', stamp, None;changed = True
         else:
