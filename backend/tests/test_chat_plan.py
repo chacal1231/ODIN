@@ -48,20 +48,20 @@ def test_a_latency_question_gets_the_measurements_of_what_it_names(client, admin
         db.commit()
     chat = conversation(client)
     llm.plans = [plan(['latencia'], categorias=['Juegos'])]
-    llm.answers = [chat_answer('Media de 55 ms [M1].', ('M1',))]
+    llm.answers = [chat_answer('Media de 55 ms [D1].', ('D1',))]
     ask(client, chat, '¿Qué latencia tenemos a los juegos?', hours=6);run_jobs()
     index = llm.plan_calls[0][1]['content']
     assert '- juegos: Free Fire, Riot' in index and 'Pregunta: «¿Qué latencia tenemos a los juegos?»' in index
     context = llm.calls[0][1]['content']
     assert 'Tema de la pregunta: latencia (categorias: juegos).' in context
-    assert ('M1 · categoría juegos · 2 destinos · período: latencia media 55,0 ms (entre 40,0 ms y 70,0 ms), peor RIOT-1 con 70,0 ms'
+    assert ('D1 · categoría juegos · 2 destinos · período: latencia media 55,0 ms (entre 40,0 ms y 70,0 ms), peor RIOT-1 con 70,0 ms'
             ' · con pérdida o fallos: RIOT-1 10,0 % · ahora: normal: 2') in context
     assert 'destino FREEFIRE-1 (Free Fire) · juegos · ICMP' in context and 'latencia media 40,0 ms, máxima 45,0 ms, pérdida 0,0 %' in context
     # The latency case of a game comes along; not other services, the BGP case or the logs of the period.
     assert 'C1 · caso de latencia hacia Free Fire' in context and 'C2 ·' not in context
     assert 'NETFLIX' not in context and 'Netflix' not in context and 'sesión BGP' not in context and 'G1 ·' not in context
     run = client.get(f'/api/v1/conversations/{chat}').json()['messages'][0]['run']
-    assert run['status'] == 'done' and run['refs']['M1']['kind'] == 'probe' and run['request']['plan']['categorias'] == ['juegos']
+    assert run['status'] == 'done' and run['refs']['D1']['kind'] == 'probe' and run['request']['plan']['categorias'] == ['juegos']
 
 
 def test_an_access_question_gets_the_olt_and_its_pon_outages(client, administrator, llm):
@@ -84,7 +84,7 @@ def test_an_access_question_gets_the_olt_and_its_pon_outages(client, administrat
     assert ('O1 · OLT OLT_5800X2 (Huawei-MA5800-X2, 10.11.104.2) · ahora: alcanzable · ONUs en línea 20 de 28 · ONUs por estado: Online 3, LOS 1'
             in context) and 'PON caídos: 1/1 de 2 con ONUs' in context and 'temperatura 36 °C' in context
     assert 'O2 · OLT OLT_5800X2 · PON 1/1: corte de fibra (LOS) · 8 de 8 ONUs · zona Zona - El Centro' in context and '(sigue activa)' in context
-    assert 'C1 ·' not in context and 'M1 ·' not in context
+    assert 'C1 ·' not in context and 'D1 ·' not in context
 
 
 def test_plan_names_are_matched_to_the_index_and_anything_else_is_dropped():
@@ -111,7 +111,7 @@ def test_a_follow_up_on_another_topic_gets_a_new_context(client, administrator, 
         target(db, 'FREEFIRE-1', 'Free Fire', ['juegos'], 40);db.commit()
     chat = conversation(client)
     llm.plans = [plan(['general']), plan(['latencia'], servicios=['Free Fire'])]
-    llm.answers = [chat_answer(), chat_answer('40 ms [M2].', ('M2',))]
+    llm.answers = [chat_answer(), chat_answer('40 ms [D2].', ('D2',))]
     ask(client, chat);run_jobs()
     ask(client, chat, '¿Y la latencia a Free Fire?', 'mensaje-0002');run_jobs()
     first, second = llm.calls

@@ -1,4 +1,4 @@
-"""Measurements for the chat: latency to the destinations ODIN probes (M) and the state of access (O).
+"""Measurements for the chat: latency to the destinations ODIN probes (D) and the state of access (O).
 
 Events alone cannot answer «what latency do we have to the games?»: a destination without incidents would not
 appear. These lines give the numbers of the period from ODIN's own stores, grouped so a category reads in one line
@@ -82,14 +82,14 @@ def latency_lines(db, start, end, plan, priority=0, detail=True, scope=None):
         worst = max(measured, key=lambda t: stats[t.id]['mean'], default=None)
         lossy = [(t, failure(t)) for t in group if (failure(t) or 0) > 0]
         states = Counter(STATES.get(current.get(t.id, {}).get('state'), 'sin datos') for t in group)
-        text = (f'M{n} · categoría {category} · {len(group)} destinos · período: ' +
+        text = (f'D{n} · categoría {category} · {len(group)} destinos · período: ' +
                 (f'latencia media {ms(sum(means) / len(means))} (entre {ms(min(means))} y {ms(max(means))}), peor {worst.name} con {ms(stats[worst.id]["mean"])}'
                  if measured else 'sin mediciones en el período') +
                 (f' · con pérdida o fallos: ' + ', '.join(f'{t.name} {pct(v)}' for t, v in sorted(lossy, key=lambda x: -x[1])[:5]) if lossy else
                  ' · sin pérdida ni fallos' if measured else '') +
                 ' · ahora: ' + ', '.join(f'{state}: {count}' for state, count in states.most_common()) +
                 (f' · {sum(incidents[t.id] for t in group)} incidentes en el período' if any(incidents[t.id] for t in group) else ''))
-        lines.append(Line(f'M{n}', start, priority, text, {'kind': 'probe', 'source': 'probe', 'ids': [t.id for t in group][:200], 'count': len(group)}))
+        lines.append(Line(f'D{n}', start, priority, text, {'kind': 'probe', 'source': 'probe', 'ids': [t.id for t in group][:200], 'count': len(group)}))
     if not detail:return lines
     # One line per destination, the most affected first when they do not all fit.
     ranked = sorted(targets, key=lambda t: (-incidents[t.id], -(failure(t) or 0), -(stats.get(t.id, {}).get('mean') or 0)))[:MAX_DESTINATIONS]
@@ -98,14 +98,14 @@ def latency_lines(db, start, end, plan, priority=0, detail=True, scope=None):
         s = stats.get(t.id)
         now_ = current.get(t.id, {})
         kind = 'ICMP' if t.protocol == 'icmp' else f'{t.protocol.upper()} (tiempo de respuesta del chequeo)'
-        text = (f'M{n} · destino {t.name}' + (f' ({t.service})' if t.service else '') + f' · {", ".join(t.categories or []) or "sin categoría"} · {kind} · {t.address} · ' +
+        text = (f'D{n} · destino {t.name}' + (f' ({t.service})' if t.service else '') + f' · {", ".join(t.categories or []) or "sin categoría"} · {kind} · {t.address} · ' +
                 (f'período: latencia media {ms(s["mean"])}, máxima {ms(s["max"])}, {label(t)} {pct(failure(t))}' if s and s['mean'] is not None else
                  'período: sin mediciones') +
                 f' · ahora: {STATES.get(now_.get("state"), "sin datos")}' + (f', p95 {ms(now_.get("p95_ms"))}' if now_.get('p95_ms') is not None else '') +
                 (f' · {incidents[t.id]} incidentes en el período' if incidents[t.id] else ''))
-        lines.append(Line(f'M{n}', start, priority, text, {'kind': 'probe', 'source': 'probe', 'ids': [t.id], 'count': 1}))
+        lines.append(Line(f'D{n}', start, priority, text, {'kind': 'probe', 'source': 'probe', 'ids': [t.id], 'count': 1}))
     if len(targets) > MAX_DESTINATIONS:
-        lines.append(Line('M0', start, priority, f'Hay {len(targets) - MAX_DESTINATIONS} destinos más de esta selección que no se muestran uno a uno '
+        lines.append(Line('D0', start, priority, f'Hay {len(targets) - MAX_DESTINATIONS} destinos más de esta selección que no se muestran uno a uno '
                           '(se muestran los más afectados).', {'kind': 'none', 'ids': [], 'count': 0}))
     return lines
 
