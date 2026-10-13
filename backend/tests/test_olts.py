@@ -284,3 +284,22 @@ def test_huawei_pon_status_and_unused_pon():
     assert not down('Enabled', 'Up / Autofind') and down('Enabled', 'Down / Autofind') and not down('Disabled', 'Down')
     assert not pon_down(OltPonPort(admin_status='Enabled', status='Down / Autofind', onus=0))
     assert pon_down(OltPonPort(admin_status='Enabled', status='Down / Autofind', onus=4))
+
+
+def test_each_pon_keeps_what_is_down_when_it_changes_and_hourly():
+    from odin.models import PonSample
+    stamp = now();zone = ZoneInfo('UTC')
+    with session() as db:
+        db.add(PonSample(olt_id='1', board='1', port='1', at=stamp - service.SAMPLE_RETENTION - 1, onus=64))
+        service.write_inventory(db, inventory_data(), stamp)
+        service.write_outages(db, {'outages': {'1': OUTAGE}}, stamp, zone);db.commit()
+        rows = lambda: [(r.port, r.at - stamp, r.onus, r.los, r.power) for r in db.scalars(select(PonSample).order_by(PonSample.at, PonSample.port))]
+        # One per PON with ONUs (1/5 is not in the inventory); the sample past the retention is gone.
+        assert rows() == [('1', 0, 64, 0, 0), ('2', 0, 64, 61, 0)]
+        # The same 5 minutes later: nothing new. The fiber back: a row for that PON. An hour later: a row for each.
+        service.write_outages(db, {'outages': {'1': OUTAGE}}, stamp + 300, zone);db.commit()
+        assert len(rows()) == 2
+        service.write_outages(db, {'outages': {'1': {**OUTAGE, 'sections': []}}}, stamp + 600, zone);db.commit()
+        assert rows()[2:] == [('2', 600, 64, 0, 0)]
+        service.write_outages(db, {'outages': {'1': {**OUTAGE, 'sections': []}}}, stamp + 3600, zone);db.commit()
+        assert [r[:2] for r in rows()[3:]] == [('1', 3600)]

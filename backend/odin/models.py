@@ -607,6 +607,8 @@ class CorrelationState(Base):
     last_success_at = Column(BigInteger)
     last_error = Column(String(80))
     alerts_enabled = Column(Boolean, nullable=False, default=False)
+    # Access: a PON outage is a common failure when its ONUs being down independently is less likely than this (cases/access.py).
+    access_significance = Column(Float, nullable=False, default=0.0001)
 
 
 
@@ -834,6 +836,20 @@ class Onu(Base):
     present = Column(Boolean, nullable=False, default=True)
     last_seen = Column(BigInteger, nullable=False)
     __table_args__ = (Index('ix_onus_pon', 'olt_id', 'board', 'port'),)
+
+
+class PonSample(Base):
+    """ONUs of a PON down by cause, as SmartOLT reports them every few minutes: stored when they change and hourly
+    otherwise (olts/service.py), so a PON's normal can be learned by time of day."""
+    __tablename__ = 'pon_samples'
+    olt_id = Column(String(40), primary_key=True)
+    board = Column(String(10), primary_key=True)
+    port = Column(String(10), primary_key=True)
+    at = Column(BigInteger, primary_key=True, index=True)
+    onus = Column(Integer, nullable=False)  # registered on the PON
+    los = Column(Integer, nullable=False, default=0)
+    power = Column(Integer, nullable=False, default=0)
+    offline = Column(Integer, nullable=False, default=0)
 
 
 class OltOutage(Base):

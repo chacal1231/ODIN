@@ -16,7 +16,7 @@ from collections import Counter
 from sqlalchemy import select, func, or_
 from ..models import Analysis, AnalysisReview, Case, CorrelationState, now
 from ..inventory.roles import critical
-from . import correlator
+from . import access, correlator
 
 EXTERNAL_TOGETHER = 3
 DAYS = 7
@@ -88,4 +88,5 @@ def calibration(db, zone='America/Bogota'):
             'reviews': {'analyses': analysed, **reviews}, 'alerts_enabled': bool((db.get(CorrelationState, 'cases') or CorrelationState()).alerts_enabled),
             'thresholds': {'quiet_close_minutes': correlator.QUIET // 60, 'stale_hours': correlator.STALE // 3600,
                            'sustained_minutes': correlator.SUSTAINED // 60, 'flap_critical': correlator.FLAP_CRITICAL,
-                           'external_together': EXTERNAL_TOGETHER}}
+                           'external_together': EXTERNAL_TOGETHER,
+                           'access_significance': (db.get(CorrelationState, 'cases') or CorrelationState()).access_significance or access.SIGNIFICANCE}}

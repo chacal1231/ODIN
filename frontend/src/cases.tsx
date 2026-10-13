@@ -90,7 +90,7 @@ export function Cases({ api, zone, admin, focusId, onAsk }: { api: Api; zone: st
       </div>
       <p>ODIN agrupa los cambios de estado de cada sesión BGP e interfaz en casos y les asocia evidencias de las demás fuentes, explicando por qué se relacionan. Una relación no demuestra la causa.</p>
       {correlator && !correlator.alerts_enabled && <p className="notice">Modo sombra: los casos se calculan y se pueden revisar aquí, pero todavía no avisan en la barra de estado.</p>}
-      <Calibration api={api} />
+      <Calibration api={api} admin={admin} />
       {error && <p role="alert">No se pudo actualizar: {error}</p>}
       {correlator && <p className="muted">Última pasada del correlador: {date(correlator.last_success_at)}{correlator.last_error && ` · Error: ${correlator.last_error}`} · Reglas versión {data.rule_version}</p>}
       {analyst?.configured && <p className="muted">Analista ({providerNames[analyst.provider] || analyst.provider}{analyst.model ? ` · ${analyst.model}` : ""}): {analyst.enabled ? "activo" : "desactivado"}
@@ -241,9 +241,17 @@ function CaseDetail({ api, zone, admin, id, onSelect, onChange, onAsk, onDraft, 
 }
 
 // How many cases would alert per day under the current rules, before switching alerts on.
-function Calibration({ api }: { api: Api }) {
+// Choices for how unlikely a PON outage must be by chance to count as a common failure (cases/access.py).
+const significances: [number, string][] = [[0.001, "1 en 1.000 (más avisos)"], [0.0001, "1 en 10.000 (recomendado)"],
+  [0.00001, "1 en 100.000"], [0.000001, "1 en 1.000.000 (menos avisos)"]];
+
+function Calibration({ api, admin }: { api: Api; admin: boolean }) {
   const [data, setData] = useState<any>(null);
   const [error, setError] = useState("");
+  const setSignificance = async (significance: number) => {
+    try { await api("/cases/settings/access", "PUT", { significance }); await load(); }
+    catch (e) { setError((e as Error).message); }
+  };
   const load = () => api("/cases/calibration").then((d) => { setData(d); setError(""); }).catch((e) => setError((e as Error).message));
   const keys = data ? Object.keys(data.groups) : [];
   const average = data?.days.length ? Math.round(data.days.reduce((n: number, d: any) => n + d.alerts, 0) / data.days.length) : 0;
@@ -256,6 +264,15 @@ function Calibration({ api }: { api: Api }) {
       <p>Con las reglas actuales, en los últimos 7 días habrían avisado <strong>{average} casos al día</strong> de media.
         Avisa: tránsito, transporte o enlace interno desde la primera caída; otras caídas solo si se sostienen {t.sustained_minutes} min o suman {t.flap_critical} caídas;
         latencia de red propia crítica; servicios externos solo cuando {t.external_together} o más se degradan a la vez.</p>
+      <p>Acceso: avisa la OLT inalcanzable, un uplink caído, un corte de fibra en varios PON a la vez y la caída de un PON que sea una
+        <strong> falla común</strong>: que tantas ONUs del PON estén caídas con la misma causa sería, si cayeran cada una por su cuenta al ritmo del resto
+        de la OLT, menos probable que {significances.find(([v]) => v === t.access_significance)?.[1].split(" (")[0] || `1 en ${Math.round(1 / t.access_significance)}`}.
+        No hay un número fijo de clientes: 4 de 4 ONUs de un PON es falla común; 4 de 200 repartidas, no.</p>
+      {admin && <label>Exigencia para la falla común
+        <select value={t.access_significance} onChange={(e) => void setSignificance(Number(e.target.value))}>
+          {significances.map(([v, label]) => <option key={v} value={v}>{label}</option>)}
+        </select>
+      </label>}
       <div className="probe-table"><table className="noc-table">
         <thead><tr><th>Día</th>{keys.map((k) => <th key={k} className="num">{data.groups[k]}</th>)}<th className="num">Avisan</th>
           <th className="num">No avisan (red)</th><th className="num">No avisan (externos)</th></tr></thead>

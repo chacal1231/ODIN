@@ -69,9 +69,13 @@ La **lectura** sigue este orden: lo primero que se cumple es lo que se informa.
 | SmartOLT no alcanza la OLT | La OLT, su energía o su uplink ("posible caída total" si además hay PON caídos) | Sí |
 | Uplink caído | La causa probable de lo que muestran sus PON | Sí |
 | LOS en 2 o más PON que empiezan con menos de 10 minutos de diferencia | Corte común: un tramo compartido o la tarjeta de la OLT | Sí |
-| LOS en un PON | Corte en la distribución de ese PON, con su zona y splitters | Desde 64 ONUs |
-| Falla de energía (*power*) | Las ONUs de los clientes perdieron energía (*dying gasp*): no es la red | Desde 64 ONUs |
-| Sin conexión (*offline*) | ONUs sin conexión, sin causa que SmartOLT pueda identificar | Desde 64 ONUs |
+| LOS en un PON | Corte en la distribución de ese PON, con su zona y splitters | Si es falla común |
+| Falla de energía (*power*) | Las ONUs de los clientes perdieron energía (*dying gasp*): no es la red | Si es falla común |
+| Sin conexión (*offline*) | ONUs sin conexión, sin causa que SmartOLT pueda identificar | Si es falla común |
+
+**Falla común en vez de un número fijo de clientes.** Una caída de PON es crítica cuando no puede ser casualidad: si cada ONU cayera por su cuenta al ritmo que se ve ahora en el resto de la OLT, que estén caídas tantas ONUs del PON con la misma causa sería menos probable que la exigencia fijada en **Casos → Calibración de avisos** (1 en 10.000 por defecto; se puede elegir entre 1 en 1.000 y 1 en 1.000.000). Así, 4 de 4 ONUs de un PON es falla común y 4 de 200 repartidas no lo es, en un ISP pequeño o grande. La lectura muestra la parte de la OLT afectada y la probabilidad, por ejemplo «16 de 20 ONUs · 14 % de la OLT · falla común: si cayeran por separado, 1 en 10²⁷». Sin los PON de la OLT leídos todavía no hay con qué comparar y la caída no se marca como falla común.
+
+Cada lectura de caídas guarda además, por PON, cuántas ONUs están caídas por causa (cuando cambia y una vez por hora, durante 90 días). Ese historial servirá para aprender lo normal de cada PON según la hora del día.
 
 La entidad del caso es el equipo de la OLT en el inventario, si existe. Eso le suma las alertas de Zabbix y LibreNMS de la OLT, los incidentes de sondeo de su gestión y, como casos relacionados, la interfaz del router que llega a ella. El caso se mantiene ligado a la OLT de SmartOLT aunque la asociación con el inventario llegue después.
 
@@ -102,7 +106,7 @@ Un caso **avisa** (en la bandeja, en el grupo del NOC y con análisis automátic
 | Otras caídas sostenidas | Sesión o interfaz crítica por duración o por repetición |
 | Latencia crítica de red propia | Caso de latencia crítico hacia un equipo propio |
 | Servicios externos | Veredicto propio o de una salida. Sin veredicto, 3 o más servicios degradados a la vez. Un servicio que falla solo no avisa |
-| Caídas de acceso críticas | OLT inalcanzable, uplink caído, corte común o 64 ONUs o más |
+| Caídas de acceso críticas | OLT inalcanzable, uplink caído, corte en varios PON a la vez o caída de PON que es falla común |
 
 Las demás caídas de acceso no avisan por Telegram ni WhatsApp, pero aparecen en la bandeja, porque el N1 las informa todas.
 

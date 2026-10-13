@@ -21,6 +21,11 @@ class AlertSettings(BaseModel):
     alerts_enabled: bool
 
 
+class AccessSettings(BaseModel):
+    # A PON outage is a common failure below this probability (cases/access.py): 1 in 1,000 up to 1 in 1,000,000.
+    significance: float = Field(ge=0.000001, le=0.001)
+
+
 def view(case):
     return {k: getattr(case, k) for k in ('id', 'kind', 'entity_key', 'entity_label', 'subject', 'detail', 'opened_at',
         'last_activity_at', 'last_state', 'last_state_at', 'resolved_at', 'closed_at', 'state', 'severity', 'drops',
@@ -198,5 +203,13 @@ def router(current, admin):
         state.alerts_enabled = body.alerts_enabled
         audit(db, 'case_alerts_enabled' if body.alerts_enabled else 'case_alerts_disabled', user.id, 'cases')
         db.commit();return {'ok': True}
+
+    @api.put('/settings/access')
+    def access_settings(body: AccessSettings, user=Depends(admin), db: Session = Depends(get_db)):
+        state = db.get(CorrelationState, 'cases')
+        if not state:state = CorrelationState(id='cases');db.add(state)
+        state.access_significance = body.significance
+        audit(db, 'case_access_significance', user.id, f'{body.significance:g}')
+        db.commit();return {'significance': state.access_significance}
 
     return api

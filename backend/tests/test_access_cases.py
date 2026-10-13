@@ -1,6 +1,8 @@
 from sqlalchemy import select
 from odin.db import session
-from odin.models import (Case, CaseEvidence, Device, InventoryInterface, Olt, OltOutage, OltUplink, Pop, SourceIdentity, now, uid)
+from odin.models import (Case, CaseEvidence, Device, InventoryInterface, Olt, OltOutage, OltPonPort, OltUplink, Pop,
+                         SourceIdentity, now, uid)
+from odin.cases import access as access_rules
 from odin.cases import correlator
 from odin.cases.api import related_cases
 from odin.cases.entities import Resolver
@@ -27,7 +29,15 @@ def access(db):
     return db.scalar(select(Case).where(Case.kind == 'access'))
 
 
-def test_single_pon_cut_is_reported_without_alerting():
+def pons(db, o, sizes):
+    """The OLT's PON ports with their registered ONUs: the rest of the OLT a PON outage is compared with."""
+    for port, onus in enumerate(sizes, 1):
+        db.add(OltPonPort(olt_id=o.id, board='0', port=str(port), admin_status='Enabled', status='Up', onus=onus, online=onus, last_seen=T))
+    db.flush()
+
+
+def test_without_the_olt_size_a_single_pon_cut_is_reported_without_alerting():
+    # No PON ports read yet: nothing to compare the outage with, so it cannot be called a common failure.
     with session() as db:
         o = olt(db);outage(db, o, 1);db.commit()
         correlator.run(db, T + 60);db.commit()
@@ -108,3 +118,51 @@ def test_router_interface_reaching_the_olt_is_related_and_analyst_reads_it():
         assert {r['relation'] for r in related_cases(db, interface, Resolver(db))} >= {'OLT que cuelga de esta interfaz'}
         header = case_pack(db, case).header
         assert 'caída de acceso en la OLT OLT-NORTE' in header and 'Lectura de ODIN' in header and 'PON 0/1 los 20 de 32 ONUs' in header
+
+
+def test_a_cut_on_most_of_one_pon_is_a_common_failure_and_alerts():
+    with session() as db:
+        o = olt(db);pons(db, o, [32, 32, 32, 32]);outage(db, o, 1);db.commit()
+        correlator.run(db, T + 60);db.commit()
+        case = access(db)
+        expected = access_rules.one_in(access_rules.chance(20, 32, 1 / 98))
+        assert case.severity == 'critical' and case in alerting(db)
+        assert case.detail['reading']['title'] == ('Corte de fibra en el PON 0/1: 20 de 32 ONUs (zona Norte, splitters S1, S2) · 16 % de la OLT'
+                                                   f' · falla común: si cayeran por separado, {expected}')
+        assert expected.startswith('1 en 10') and case.detail['pons'][0]['chance'] < 1e-20
+
+
+def test_scattered_customers_are_not_a_common_failure():
+    # Power lost by a few customers on every PON: what people switching off their ONU looks like.
+    with session() as db:
+        o = olt(db);pons(db, o, [32, 32, 32, 32])
+        for port, affected in ((1, 3), (2, 4), (3, 3)):outage(db, o, port, cause='power', affected=affected)
+        db.commit()
+        correlator.run(db, T + 60);db.commit()
+        case = access(db)
+        assert case.severity == 'warning' and case not in alerting(db)
+        assert case.detail['reading']['title'] == 'Falla de energía en la zona: 10 ONUs sin energía (Norte) · 8 % de la OLT'
+
+
+def test_a_whole_small_pon_alerts_and_a_lone_customer_does_not():
+    assert access_rules.reading('OLT', False, [], [{'board': '0', 'port': '1', 'cause': 'los', 'zone': '', 'affected': 4, 'subscribers': 4,
+                                                    'started_at': T, 'odbs': []}], registered=100)[3] is True
+    assert access_rules.reading('OLT', False, [], [{'board': '0', 'port': '1', 'cause': 'los', 'zone': '', 'affected': 1, 'subscribers': 1,
+                                                    'started_at': T, 'odbs': []}], registered=100)[3] is False
+
+
+def test_the_noc_sets_how_unlikely_a_common_failure_must_be(client, administrator):
+    from test_access import enroll
+    enroll(client)
+    with session() as db:
+        o = olt(db);pons(db, o, [32, 32, 32, 32]);outage(db, o, 1, affected=5);db.commit()
+    # 5 of 32 down with 1 in 98 elsewhere: about 1 in 56,000.
+    with session() as db:
+        correlator.run(db, T + 60);db.commit()
+        assert access(db).severity == 'critical'
+    assert client.put('/api/v1/cases/settings/access', json={'significance': 0.5}).status_code == 422
+    assert client.put('/api/v1/cases/settings/access', json={'significance': 0.00001}).json() == {'significance': 0.00001}
+    assert client.get('/api/v1/cases/calibration').json()['thresholds']['access_significance'] == 0.00001
+    with session() as db:
+        correlator.run(db, T + 120);db.commit()
+        assert access(db).severity == 'warning'

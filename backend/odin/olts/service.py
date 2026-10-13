@@ -1,5 +1,8 @@
 """SmartOLT reader on the job queue: outages every 5 minutes, OLT inventory every hour, ONUs once a day.
 
+Each outage read also keeps, per PON, how many ONUs are down by cause (PonSample): a row when it changes and one an
+hour otherwise, for 90 days, so a PON's normal can be learned by time of day.
+
 Each read runs as one job of the worker. Network reads happen with no database transaction open; the result is
 written afterwards in one transaction. Due times carry a random delay, as SmartOLT asks, and a 429 stops every read
 until its Retry-After. With 2 OLTs a day costs about 30 calls per hour of the 1,000 the account has.
@@ -11,10 +14,11 @@ import logging
 import random
 import re
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
-from sqlalchemy import select, update
+from collections import Counter
+from sqlalchemy import delete, func, select, update
 from ..db import session
 from ..jobs import enqueue
-from ..models import (Device, Integration, InventoryInterface, Job, Olt, OltOutage, OltPonPort, OltUplink, Onu, SmartoltState,
+from ..models import (Device, Integration, InventoryInterface, Job, Olt, OltOutage, OltPonPort, OltUplink, Onu, PonSample, SmartoltState,
                       SourceIdentity, now, uid)
 from ..security import decrypt
 from ..inventory.connectors import ConnectorError
@@ -24,6 +28,8 @@ INTERVALS = {'outages': 300, 'inventory': 3600, 'onus': 86400}
 # Inventory first: outages are read per OLT, so they need the OLT list (an account without OLTs costs no outage calls).
 ORDER = ('inventory', 'outages', 'onus')
 CAUSES = ('los', 'power', 'offline')
+SAMPLE_KEEPALIVE = 3600
+SAMPLE_RETENTION = 90 * 86400
 NUMBER = re.compile(r'-?\d+(?:[.,]\d+)?')
 UPTIME = re.compile(r'(?:(\d+)\s*days?,?\s*)?(\d+):(\d{2})(?::(\d{2}))?')
 
@@ -204,6 +210,26 @@ def write_outages(db, data, stamp_, zone):
             row.last_seen = stamp_
         for ident, row in active.items():
             if ident not in current:row.active, row.ended_at = False, stamp_
+        sample_pons(db, key, stamp_)
+    db.execute(delete(PonSample).where(PonSample.at < stamp_ - SAMPLE_RETENTION))
+
+
+def sample_pons(db, olt_id, stamp_):
+    """A row per PON with ONUs when what is down changed since its last row, or SAMPLE_KEEPALIVE after it."""
+    down = {}
+    for o in db.scalars(select(OltOutage).where(OltOutage.olt_id == olt_id, OltOutage.active.is_(True), OltOutage.cause.in_(CAUSES))):
+        down.setdefault((o.board, o.port), Counter())[o.cause] += o.affected
+    latest = (select(PonSample.board, PonSample.port, func.max(PonSample.at).label('at')).where(PonSample.olt_id == olt_id)
+              .group_by(PonSample.board, PonSample.port).subquery())
+    last = {(r.board, r.port): r for r in db.scalars(select(PonSample).join(latest, (PonSample.board == latest.c.board)
+                                                       & (PonSample.port == latest.c.port) & (PonSample.at == latest.c.at)).where(PonSample.olt_id == olt_id))}
+    for pon in db.scalars(select(OltPonPort).where(OltPonPort.olt_id == olt_id, OltPonPort.onus > 0)):
+        counts = down.get((pon.board, pon.port), Counter())
+        values = (pon.onus, counts['los'], counts['power'], counts['offline'])
+        before = last.get((pon.board, pon.port))
+        if before and (before.onus, before.los, before.power, before.offline) == values and stamp_ - before.at < SAMPLE_KEEPALIVE:continue
+        if before and before.at == stamp_:continue
+        db.add(PonSample(olt_id=olt_id, board=pon.board, port=pon.port, at=stamp_, onus=values[0], los=values[1], power=values[2], offline=values[3]))
 
 
 def write_onus(db, data, stamp_, zone):
